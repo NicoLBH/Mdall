@@ -163,6 +163,47 @@ trois fonctions de bord. Une seconde orchestration au serveur aurait lu un rappo
 autrement sans que rien ne le dise (règle 4) — et celle-ci est éprouvée par
 `npm test`, échecs d'étape compris.
 
+## Un fil de mails ne passe pas par la file, et c'est voulu
+
+C'est la seule famille qui déroge, et la raison tient en une phrase : **un fil est
+un appel, pas un lot.**
+
+Les comptes rendus et les rapports sont lus **un par un**. Dix-neuf comptes rendus
+sont dix-neuf appels au modèle, des minutes chacun : c'est ce qui a fait la file —
+on lance, on ferme l'onglet, Actions dit où cela en est. Un fil de sept mails est
+**un seul appel** : les sept messages montent ensemble, et le modèle les lit en
+une fois parce que c'est leur enchaînement qui porte le sens.
+
+Le dépliage des `.msg`, `.eml` et `.zip`, lui, est gratuit dans le navigateur — il
+ne parle à personne et ne coûte rien. Poser une ligne de file pour un appel de
+quelques secondes ajouterait un aller-retour, une ligne dans Actions à relire, et
+une reprise à écrire, pour ne rien gagner (règle 12).
+
+**Ce qui ferait changer d'avis** : un fil assez gros pour devoir se découper en
+plusieurs appels. Il faudrait alors une file, et ce serait la même.
+
+```
+choisir des mails dans Fichiers  →  les octets se lisent
+                                 →  chaque fichier rend ses messages (dépliés sur place)
+                                 →  UN relevé pour tout le fil
+                                 →  la lecture est conservée
+```
+
+Trois précisions que `lire-un-fil-de-mails.js` tient, et qui sont éprouvées :
+
+- **un document qu'on n'a pas su descendre ne fait pas couler le fil.** Il se
+  compte, et son nombre se dit : un fil lu à six messages sur sept doit se savoir,
+  sinon on conclut sur un fil qu'on croit entier (règle 5) ;
+- **un relevé qui échoue ne garde rien.** Conserver une lecture vide ferait croire
+  le fil lu, et personne ne le relancerait (règle 6) ;
+- **le chooser demande au registre ce que chaque famille sait lire.** `accepte`
+  *est* cette liste ; en tenir une seconde dans le chooser aurait fait diverger les
+  deux au premier format nouveau (règle 10).
+
+Et le bouton dit « Lire 7 mails », non « Lire 7 fils » : c'est `quoiAuChoix` du
+registre — au moment du choix on désigne des mails, c'est à l'arrivée qu'ils font
+un fil.
+
 ## Ajouter une famille — un plan, un cartouche, une notice
 
 C'est le point du registre `les-familles-de-document.js`. Il faut, et il suffit :
@@ -504,11 +545,6 @@ dit celui qui ajoute, comme ailleurs dans l'application.
 que « Choisir depuis Fichiers », et c'est volontaire : ces documents sont déjà dans
 le projet, les redéposer depuis l'ordinateur en ferait un second exemplaire — le
 genre de doublon qu'on ne remarque qu'au vingtième.
-
-**La lecture d'un fil de mails ne part pas encore d'ici.** Son geste est déclaré,
-sa fonction de bord existe depuis octobre, et le registre la connaît ; ce qui
-manque est que le dépôt de messagerie monte les octets, là où les deux autres
-familles lisent des documents déjà rangés. C'est un round à part.
 
 **Rien n'entre en mémoire depuis cet écran.** Le chemin reste copilote → atelier →
 proposition → mémoire (règle 1).

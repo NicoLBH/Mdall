@@ -303,6 +303,10 @@ La page est le **carnet de bord du moteur**, et sa mesure est déjà définie
   expirée, quota atteint ;
 - la durée des appels, et sa dérive.
 
+**Fait, sauf la durée** — voir *5 ter*. Les refus se lisent groupés par cause et
+par fonction, sur deux fenêtres. La durée des appels n'est pas mesurée :
+`ai_usages` garde ce qu'un appel a coûté, pas combien de temps il a pris.
+
 ### F. Les comptes et la facturation
 
 - l'organisation, ses membres, son plan, ses factures ;
@@ -451,12 +455,161 @@ l'appel ni le projet ; les dessiner quand même donnait une seule barre,
 Elle existait avec **un** onglet, pour dire qu'il y en aurait d'autres.
 « Utilisateurs » est le second, et il passe **en premier** : la première question
 d'exploitation est « qui est là », et tout le reste porte sur ce que ces gens ont
-versé.
+versé. « Exploitation » est le troisième, et il se glisse **au milieu** : on
+pourrait défendre l'inverse — regarder d'abord si la machine tourne —, mais la
+place du premier onglet a été posée explicitement, et la déplacer sans qu'on le
+demande ferait bouger un repère sous la main de quelqu'un qui l'avait appris.
 
 **Chaque rubrique déclare son onglet**, et non l'inverse. L'adresse nomme la
 rubrique — `#comptes`, `#sujets` — et l'onglet s'en déduit : un signet ouvre la
 bonne rubrique dans le bon onglet, et il n'y a pas deux états à accorder entre la
 barre du haut et le rail de gauche (règle 10).
+
+## 5 ter. *Exploitation* — la santé, l'usage, et qui a regardé
+
+Trois rubriques, dans l'ordre où l'on se pose les questions :
+
+> est-ce que cela répond ? → qu'est-ce qu'il y a dedans ? → qui a regardé ?
+
+La santé d'abord, parce que si rien ne répond, les chiffres d'usage de l'écran
+suivant sont ceux d'une installation en panne — et on les lirait comme un creux
+d'activité.
+
+### La question posée, et la réponse qu'on ne donne pas
+
+> « Est-ce qu'il y a un moyen de savoir si les systèmes sont opérationnels ?
+> Supabase, OpenAI, GitHub… ? »
+
+Il y en a un, et **ce n'est pas la page d'état du fournisseur**. Celle-ci dit si
+le fournisseur va bien *dans le monde*. Elle ne dit rien de ce qui casse en
+pratique : une clé révoquée, un quota épuisé, une fonction non déployée, une
+migration non appliquée, un portail qui refuse notre requête. Dans **tous** ces
+cas la page du fournisseur est verte et Mdall ne marche pas.
+
+L'afficher serait un voyant qui rassure sans rien mesurer — exactement le genre
+d'indicateur qu'on apprend à ignorer, et qui vaut moins que pas d'indicateur du
+tout (règle 12).
+
+On lit donc ce que Mdall a **lui-même observé** :
+
+| Système | Ce qu'on regarde | Ce que sa trace prouve |
+| --- | --- | --- |
+| La base | la lecture elle-même est revenue | ce tableau s'affiche, donc elle a répondu à l'instant |
+| Le stockage | le dernier document rangé | un casier qui accepte les octets |
+| Le modèle | le dernier appel abouti | une fonction qui tourne, une clé qui vaut, un fournisseur qui a répondu |
+| Les fonctions de bord | la dernière ligne de file prise | un serveur qui tourne et qui se réveille |
+
+C'est moins universel et beaucoup plus utile : c'est vrai de notre installation
+et d'aucune autre.
+
+### La seule ligne qui compte vraiment
+
+**Aucune trace ne veut pas dire que tout va bien.** C'est le piège exact de ce
+genre de tableau : une installation neuve, une clé jamais utilisée, une fonction
+jamais déployée ne laissent aucune trace — et un tableau qui compte les pannes y
+trouverait zéro panne, et afficherait du vert.
+
+Cinq verdicts, donc, et aucun « répond » sans preuve positive :
+
+- **répond** — vu répondre récemment, et rien ne s'en plaint ;
+- **répond, avec des refus** — vu répondre, *et* des refus récents le concernent ;
+- **sans nouvelles** — vu répondre un jour, pas récemment. **Ce n'est pas « en
+  panne »** : Mdall ne sait pas distinguer « personne ne s'en est servi » de « il
+  ne répond plus », et une sonde qui appellerait le modèle toutes les cinq
+  minutes pour le savoir serait une facture, pas une mesure (fondamental 13) ;
+- **on ne sait pas** — aucune trace, jamais ;
+- **bloqué** — le seul qui affirme une panne, et il ne vient jamais d'une
+  absence : une file prise et jamais refermée.
+
+« On ne sait pas » et « sans nouvelles » restent **neutres** à l'écran. Les
+peindre en vert serait le mensonge que tout ce tableau existe pour empêcher ; en
+rouge, ce serait affirmer une panne qu'on n'a pas constatée.
+
+### Les refus, par cause, avec leur remède
+
+Les huit genres de panne de `journal-des-refus.js` se rangent de trois côtés :
+le fournisseur a répondu non (`quota`, `surcharge`, `refuse`), rien n'a répondu
+ou la porte était fermée (`injoignable`, `non-autorise`), ou c'est un défaut de
+Mdall (`mal-forme`, `trop-grand`, `trop-long`). C'est la première question qu'on
+se pose devant un refus, et la seule dont la réponse change le geste.
+
+Les remèdes viennent de `journal-des-refus.js`, qui les tient déjà pour l'écran
+de l'utilisateur : deux listes auraient fini par conseiller deux gestes
+différents pour la même panne (règle 4).
+
+### La file : deux moitiés qu'on ne confond pas
+
+Une ligne `en_cours` depuis une heure a été **abandonnée en route** ; une ligne
+`en_attente` depuis une heure **n'a jamais été prise**. La première est un
+travail perdu que la reprise reprendra ; la seconde dit que la fonction de bord
+ne tourne pas du tout. Les dix minutes du seuil ne sont pas choisies là : c'est
+`ABANDONNEE_APRES_MS` de `services/reveiller-la-file.js`.
+
+### Ce qu'on ne sait pas d'ici, et qui est écrit à l'écran
+
+Nommé, et non laissé en blanc : un tableau à quatre lignes qui ne dit pas qu'il y
+a une cinquième chose se lit comme un tableau complet.
+
+- **GitHub.** Mdall ne l'appelle jamais en marche : c'est par lui qu'il se
+  déploie, pas par lui qu'il tourne. Un voyant vert ici ne dirait rien du
+  produit, et un voyant rouge n'empêcherait personne de travailler.
+- **Le quota du plan Supabase.** Il ne se déduit d'aucune table. Les octets
+  rangés se comptent ; la limite au-delà de laquelle ils ne rentreront plus, non
+  — et l'inventer ferait une jauge fausse.
+- **Le trafic, et le temps passé dans l'application.** Il n'y a pas de table de
+  séances. La dernière venue de chaque compte se sait ; combien de temps il est
+  resté, non. Le fabriquer demanderait un mouchard sur chaque écran.
+- **L'état des fournisseurs dans le monde.** Voir plus haut.
+
+### L'usage : pourquoi la médiane, et pas seulement la moyenne
+
+« 14 documents par chantier » recouvre aussi bien cinquante chantiers à quatorze
+que quarante-neuf à un et un à sept cents. Ce ne sont pas les mêmes clients, ce
+n'est pas le même tarif, ce ne sont pas les mêmes limites. On rend donc la
+moyenne, **la médiane, le minimum et le maximum** — et une phrase le dit quand la
+moyenne vaut au moins le double de la médiane.
+
+Les documents effacés **se comptent à part**, et c'est voulu : ils occupent
+encore des octets tant que rien ne les a retirés du casier. Ne pas les afficher
+ferait croire un effacement accompli alors que les octets sont toujours là — et
+c'est exactement ce qu'un effacement RGPD doit pouvoir montrer comme fait.
+
+### Le journal des consultations : lisible, et toujours ineffaçable
+
+`acces_administrateurs` a été posée **sans aucune politique**, et la migration
+qui la crée dit pourquoi : « un journal des accès que son sujet peut relire est
+un journal qu'il peut vérifier avant d'effacer ».
+
+La propriété à tenir n'était pas « illisible ». C'était **ineffaçable**, et elle
+ne bouge pas : aucune politique d'écriture ni de suppression n'est ajoutée, la
+table reste hors de portée de PostgREST, et une fonction gardée la rend en
+lecture — **en journalisant sa propre lecture**. On peut donc voir qui a
+regardé, et l'on ne peut ni ajouter une ligne, ni en retirer une, ni regarder
+sans laisser la sienne.
+
+### Un curseur, et non un numéro de page
+
+Le banc des politiques a pris la première version en faute : **la fonction écrit
+dans la table qu'elle pagine**. Chaque lecture y pose sa propre ligne en tête,
+donc l'`offset 10` de la page 2 arrivait une ligne trop tard — la page 2
+répétait la dernière ligne de la page 1, et plus on avançait, plus des lignes se
+voyaient deux fois tandis que d'autres glissaient hors de portée sans jamais
+être vues.
+
+Un curseur ne décrit pas une position dans un ensemble qui bouge : il décrit une
+ligne — « ce qui est plus vieux que celle-ci ». La clé est `(quand, id)` et non
+`quand` seul, parce que deux lignes du même instant feraient sauter la seconde.
+
+Dans un journal, c'est le défaut qui compte : **une consultation qu'on ne voit
+jamais est une consultation qui n'a pas eu lieu** (règle 5).
+
+### Ce que l'exploitation ne montre pas
+
+Ni nom de fichier, ni objet de mail, ni texte de document, ni conversation. Des
+octets sommés **par casier** — jamais « les dix plus gros documents », qui serait
+utile et dont chaque ligne porterait le nom d'un fichier de chantier.
+`la-cloison-de-la-console.test.mjs` lit la migration, les modules emportés et le
+site construit, et refuse ces noms.
 
 ## 6. Ce qu'il faut décider et écrire — la conformité
 

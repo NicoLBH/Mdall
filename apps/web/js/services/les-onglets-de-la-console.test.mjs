@@ -17,9 +17,15 @@ import {
  * combien de matière, ce qui se reconnaît, ce qui se prédit — porte sur ce que
  * ces gens ont versé. Un onglet de comptes placé après les comptes du carburant
  * se lirait comme une annexe.
+ *
+ * **L'exploitation s'est glissée au milieu**, et non en tête : on pourrait
+ * défendre l'inverse — regarder d'abord si la machine tourne —, mais la place du
+ * premier onglet a été posée explicitement, et la déplacer sans qu'on le demande
+ * ferait bouger un repère sous la main de quelqu'un qui l'avait appris.
  */
-test("les deux onglets, et les utilisateurs d'abord", () => {
-  assert.deepEqual(ONGLETS_DE_LA_CONSOLE.map((un) => un.dit), ["Utilisateurs", "Carburant"]);
+test("les trois onglets, et les utilisateurs d'abord", () => {
+  assert.deepEqual(ONGLETS_DE_LA_CONSOLE.map((un) => un.dit),
+    ["Utilisateurs", "Exploitation", "Carburant"]);
   assert.equal(ONGLET_PAR_DEFAUT, ONGLET.UTILISATEURS);
 });
 

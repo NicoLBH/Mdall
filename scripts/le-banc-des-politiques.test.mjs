@@ -125,6 +125,14 @@ const LES_MIGRATIONS = [
   // fonctions `security definer` qui lisent des **personnes** : c'est le cas où
   // il faut essayer d'entrer, pas relire la règle.
   "202611220001_les_comptes_de_mdall.sql",
+  // Le journal des refus : c'est la seule trace de ce qui n'a **pas** abouti, et
+  // la santé des systèmes ne lit rien d'autre. Sans lui, la fonction ne se
+  // déploie pas.
+  "202610190001_le_journal_des_refus.sql",
+  // L'exploitation : la santé des systèmes, le journal des consultations, et le
+  // stockage. Trois fonctions `security definer` de plus — dont une qui rend
+  // lisible un journal posé sans aucune politique.
+  "202611230001_lexploitation_de_mdall.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -3351,3 +3359,503 @@ test("un compte effacé quitte la liste des comptes", { skip: sansPostgres }, ()
 
   banc.sql(`update auth.users set deleted_at = null where id = '${B}';`);
 });
+
+// ── L'exploitation de Mdall ─────────────────────────────────────────────────
+//
+// Trois fonctions qui disent l'état de l'installation. Elles sont `security
+// definer` : elles lisent par-dessus les politiques, dont celles d'une table
+// posée **sans aucune politique**. C'est exactement le cas où il faut essayer
+// d'entrer, pas relire la règle.
+
+/** De quoi faire parler la santé : un appel abouti, deux refus, deux files. */
+function desTraces() {
+  banc.sql(`
+    insert into public.administrateurs (courriel) values ('patron@mdall.example')
+      on conflict do nothing;
+    delete from public.refus_des_fonctions;
+    delete from public.versements;
+
+    insert into public.refus_des_fonctions (owner_id, fonction, motif, survenu_le) values
+      -- Deux fois le même genre sur la même fonction : ils se regroupent.
+      ('${A}', 'extract-avis', 'quota', now() - interval '20 minutes'),
+      ('${A}', 'extract-avis', 'quota', now() - interval '40 minutes'),
+      -- Un autre genre sur la même fonction : il ne se confond pas avec le premier.
+      ('${A}', 'extract-avis', 'surcharge', now() - interval '1 hour'),
+      -- Hors de la fenêtre de 24 h, dans celle de 7 jours.
+      ('${A}', 'project-copilot', 'injoignable', now() - interval '4 days'),
+      -- Cinquante jours : au-delà de la semaine que la borne haute impose, et en
+      -- deçà des mille heures qu'on peut demander. C'est lui qui fait tomber la
+      -- borne si on l'enlève.
+      ('${A}', 'verser-les-mails', 'mal-forme', now() - interval '50 days');
+
+    insert into public.versements (project_id, owner_id, geste, statut, cree_le, pris_le) values
+      -- Prise il y a vingt minutes et jamais refermée : abandonnée en route.
+      ('${MEDIATHEQUE}', '${A}', 'mails', 'en_cours', now() - interval '30 minutes',
+        now() - interval '20 minutes'),
+      -- Prise il y a deux minutes : elle travaille, elle ne bloque rien.
+      ('${MEDIATHEQUE}', '${A}', 'mails', 'en_cours', now() - interval '3 minutes',
+        now() - interval '2 minutes'),
+      -- Jamais prises : l'autre moitié, celle qui dit que rien ne tourne. **Deux,
+      -- d'âges différents** : avec une seule, « la plus vieille » et « la plus
+      -- récente » seraient la même ligne, et l'épreuve ne verrait pas la
+      -- différence (règle 4).
+      ('${MEDIATHEQUE}', '${A}', 'mails', 'en_attente', now() - interval '2 days', null),
+      ('${MEDIATHEQUE}', '${A}', 'mails', 'en_attente', now() - interval '5 minutes', null);
+  `);
+}
+
+/** Un champ d'une ligne rendue par une fonction de la console. */
+function leChamp(sortie, rang) {
+  return sortie.split("\n").map((une) => une.trim()).filter(Boolean)[0]
+    ?.split("|").map((un) => un.trim())[rang] ?? "";
+}
+
+/**
+ * **La santé rend ce qu'on a vu, pas un verdict.**
+ *
+ * Les derniers succès et les refus groupés par genre et par fonction. Le
+ * regroupement est le point : « trois pannes » ne dit rien, « deux quotas et une
+ * surcharge sur extract-avis » dit quoi faire (règle 12).
+ */
+test("la santé des systèmes groupe les refus par fonction et par genre",
+  { skip: sansPostgres }, () => {
+    desTraces();
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select jsonb_pretty(refus_recents) from public.la_sante_des_systemes(24);");
+    assert.equal(lu.ok, true, lu.motif);
+
+    // Deux quotas d'un côté, une surcharge de l'autre : deux entrées, pas trois.
+    assert.match(lu.sortie, /"motif":\s*"quota"[\s\S]*?"combien":\s*2/, lu.sortie);
+    assert.match(lu.sortie, /"motif":\s*"surcharge"[\s\S]*?"combien":\s*1/, lu.sortie);
+    // Le refus de mercredi n'est pas dans la fenêtre de vingt-quatre heures.
+    assert.doesNotMatch(lu.sortie, /injoignable/,
+      "un refus hors fenêtre est compté dans les refus récents");
+
+    // Et il est bien dans celle de sept jours : les deux fenêtres ne disent pas
+    // la même chose, et c'est pour cela qu'il y en a deux.
+    const semaine = banc.sousLadresse("patron@mdall.example",
+      "select refus_semaine::text from public.la_sante_des_systemes(24);");
+    assert.match(semaine.sortie, /injoignable/,
+      "un refus de la semaine est absent de la fenêtre de sept jours");
+  });
+
+/**
+ * **Prise et abandonnée n'est pas prise et en train de travailler.**
+ *
+ * Les dix minutes viennent de `ABANDONNEE_APRES_MS`. Compter la ligne prise il y
+ * a deux minutes ferait dire « une file bloquée » de chaque lecture en cours — et
+ * l'indicateur deviendrait du bruit qu'on apprend à ignorer.
+ */
+test("la santé distingue une file abandonnée d'une file qui travaille",
+  { skip: sansPostgres }, () => {
+    desTraces();
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select files_bloquees, files_en_attente,"
+      + " (now() - plus_vieille_attente) > interval '1 day'"
+      + " from public.la_sante_des_systemes(24);");
+    assert.equal(lu.ok, true, lu.motif);
+
+    assert.equal(leChamp(lu.sortie, 0), "1",
+      `une file qui travaille est comptée bloquée, ou l'abandonnée ne l'est pas : ${lu.sortie}`);
+    assert.equal(leChamp(lu.sortie, 1), "2", lu.sortie);
+    assert.equal(leChamp(lu.sortie, 2), "t",
+      "la plus vieille attente n'est pas celle d'il y a deux jours, mais la plus récente");
+  });
+
+/**
+ * **La fenêtre est bornée, et l'heure est celle du serveur.**
+ *
+ * Mille heures feraient un balayage sans index utile. Et `regarde_le` vient de
+ * la base : sans elle l'écran daterait ses phrases de l'horloge du navigateur,
+ * qui peut être fausse de deux heures — et « rien depuis 2 h » se lirait panne.
+ */
+test("la fenêtre de la santé se borne, et l'heure vient de la base",
+  { skip: sansPostgres }, () => {
+    desTraces();
+
+    for (const heures of [1000, 0, -5, null]) {
+      const essai = banc.sousLadresse("patron@mdall.example",
+        `select count(*) from public.la_sante_des_systemes(${heures ?? "null"});`);
+      assert.equal(essai.ok, true, `${heures} : ${essai.motif}`);
+      assert.equal(essai.sortie.trim(), "1", `${heures} rend ${essai.sortie}`);
+    }
+
+    /**
+     * **La borne haute se mesure à ce qu'elle écarte.**
+     *
+     * Mille heures font quarante et un jours. Un refus d'il y a cinquante jours
+     * reste dehors de toute façon — mais sans la borne, la fenêtre de « récent »
+     * s'étendrait à quarante et un jours, et « ce qui casse en ce moment »
+     * mélangerait une panne de ce matin à une d'il y a six semaines (règle 12).
+     */
+    const mille = banc.sousLadresse("patron@mdall.example",
+      "select refus_recents::text from public.la_sante_des_systemes(1000);");
+    assert.doesNotMatch(mille.sortie, /mal-forme/,
+      "la fenêtre de « récent » dépasse la semaine : la borne haute ne tient pas");
+
+    /**
+     * **Et la borne basse à ce qu'elle garde.** Zéro heure ferait une fenêtre
+     * de largeur nulle : zéro refus, ce qui se lit « tout va bien » — le seul
+     * mensonge que ce tableau ne doit jamais dire (règle 5).
+     */
+    const zero = banc.sousLadresse("patron@mdall.example",
+      "select refus_recents::text from public.la_sante_des_systemes(0);");
+    assert.match(zero.sortie, /quota/,
+      "une fenêtre de zéro heure rend zéro refus : cela se lit « tout va bien »");
+
+    const quand = banc.sousLadresse("patron@mdall.example",
+      "select (now() - regarde_le) < interval '10 seconds' from public.la_sante_des_systemes(24);");
+    assert.equal(quand.sortie.trim(), "t", "la santé ne dit pas quand on a regardé");
+  });
+
+/** La porte de la console tient sur les trois fonctions de l'exploitation. */
+test("l'exploitation se refuse à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    const appels = [
+      "public.la_sante_des_systemes(24)",
+      "public.les_consultations_de_la_console(null, null, 50)",
+      "public.lexploitation_de_mdall()"
+    ];
+
+    for (const appel of appels) {
+      const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+        `select count(*) from ${appel};`);
+      assert.equal(etranger.ok, false, `${appel} s'ouvre à un étranger`);
+
+      const sansJeton = banc.sansCompte(`select count(*) from ${appel};`);
+      assert.equal(sansJeton.ok, false, `${appel} s'ouvre à la clé publique`);
+    }
+  });
+
+/**
+ * **Le journal se lit, et il reste ineffaçable.**
+ *
+ * La table a été posée sans aucune politique, et la propriété à tenir n'était
+ * pas « illisible » : c'était **ineffaçable**. Cette épreuve vérifie les deux
+ * moitiés d'un coup — la lecture passe par la fonction gardée, et personne ne
+ * peut ni ajouter une ligne ni en retirer une.
+ */
+test("le journal des consultations se lit sans devenir effaçable",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_consultations_de_la_console(null, null, 50);");
+    assert.equal(lu.ok, true, lu.motif);
+    assert.ok(Number(lu.sortie.trim()) > 0,
+      "le journal se lit vide alors que la console vient d'être consultée");
+
+    /**
+     * **On mesure ce qui reste, pas si l'ordre a crié.**
+     *
+     * Avec RLS active et aucune politique, un `delete` ne lève rien : il touche
+     * zéro ligne et rend la main. Éprouver l'erreur aurait éprouvé le mécanisme ;
+     * la propriété à tenir est qu'**aucune ligne ne disparaisse** — et c'est elle
+     * qu'on compte, avant et après.
+     */
+    const combien = () => Number(banc.sql(
+      "select count(*) from public.acces_administrateurs;").sortie.trim());
+    const avant = combien();
+
+    for (const essai of [
+      "insert into public.acces_administrateurs (courriel, page) values ('faux@mdall.example', 'x')",
+      "delete from public.acces_administrateurs",
+      "update public.acces_administrateurs set courriel = 'autre@mdall.example'"
+    ]) {
+      banc.sousLadresse("patron@mdall.example", essai + ";");
+      banc.sansCompte(essai + ";");
+    }
+
+    assert.equal(combien(), avant,
+      "le journal a changé de taille : il n'est plus ineffaçable");
+    assert.equal(
+      banc.sql("select count(*) from public.acces_administrateurs"
+        + " where courriel in ('faux@mdall.example', 'autre@mdall.example');").sortie.trim(),
+      "0", "une ligne de journal a été écrite ou réécrite à la main");
+  });
+
+/**
+ * **Elle journalise sa propre lecture.**
+ *
+ * C'est ce qui rend la lecture sans danger : on peut voir qui a regardé le
+ * journal, dans le journal. Une lecture muette aurait fait du journal un endroit
+ * où l'on peut fouiller sans laisser de trace — et c'est précisément ce que le
+ * journal existe pour empêcher.
+ */
+test("lire le journal des consultations laisse sa propre trace",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      delete from public.acces_administrateurs;`);
+
+    banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_consultations_de_la_console(null, null, 50);");
+
+    const laTrace = banc.sql(
+      "select page from public.acces_administrateurs order by quand desc limit 1;");
+    assert.match(laTrace.sortie, /exploitation\/consultations/,
+      "une lecture du journal ne s'y inscrit pas");
+  });
+
+/**
+ * **Parcourir tout le journal, et voir chaque ligne une fois.**
+ *
+ * La borne de deux cents lignes, et le parcours au curseur — c'est l'épreuve qui
+ * a trouvé le défaut de l'`offset`.
+ */
+test("le journal des consultations se parcourt sans se répéter ni se perdre",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      delete from public.acces_administrateurs;
+      -- **Soixante instants, cinq lignes chacun.** Les ex æquo sont le cas que
+      -- l'identifiant du curseur existe pour tenir : avec une comparaison sur la
+      -- seule date, quatre lignes sur cinq de chaque instant se feraient sauter
+      -- — et ce sont des lignes de journal qui disparaîtraient.
+      insert into public.acces_administrateurs (courriel, page, filtre, quand)
+      select 'patron@mdall.example', 'console/x', '', now() - (n || ' minutes')::interval
+      from generate_series(1, 60) as n, generate_series(1, 5) as copie;`);
+
+    // La borne tient : deux cents lignes au plus, quoi qu'on demande.
+    const large = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_consultations_de_la_console(null, null, 5000);");
+    assert.equal(large.ok, true, large.motif);
+    assert.ok(Number(large.sortie.trim()) <= 200,
+      `une page rend ${large.sortie.trim()} lignes : la borne ne tient pas`);
+
+    // Et le total dit combien il y en a, au-delà de la page rendue.
+    const total = banc.sousLadresse("patron@mdall.example",
+      "select max(combien_en_tout) from public.les_consultations_de_la_console(null, null, 10);");
+    assert.ok(Number(total.sortie.trim()) >= 300, total.sortie);
+
+    /**
+     * **Six pages de dix, et chaque ligne vue une fois.**
+     *
+     * C'est l'épreuve qui a trouvé le défaut : la fonction **écrit dans la table
+     * qu'elle pagine**, donc chaque lecture posait une ligne en tête et décalait
+     * la suivante d'un cran. La page 2 répétait la dernière ligne de la page 1,
+     * et d'autres glissaient hors de portée sans jamais être vues. Une seule
+     * paire de pages ne l'aurait pas montré assez fort : on en parcourt six.
+     */
+    const vues = [];
+    let avant = "null";
+    let avantId = "null";
+    for (let page = 0; page < 6; page += 1) {
+      const lu = banc.sousLadresse("patron@mdall.example",
+        `select id::text || '|' || quand::text from public.les_consultations_de_la_console(`
+        + `${avant}, ${avantId}, 10);`);
+      assert.equal(lu.ok, true, lu.motif);
+      const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean)
+        .map((une) => une.split("|").map((un) => un.trim()));
+      assert.equal(lignes.length, 10, `la page ${page + 1} rend ${lignes.length} lignes`);
+      for (const [id] of lignes) vues.push(id);
+      const derniere = lignes[lignes.length - 1];
+      avantId = `'${derniere[0]}'`;
+      avant = `'${derniere[1]}'`;
+    }
+
+    assert.equal(new Set(vues).size, vues.length,
+      "une ligne du journal est rendue deux fois : la pagination décale sous elle-même");
+
+    /**
+     * **Et rien n'a été sauté.** Les soixante vues doivent être les soixante plus
+     * récentes — journaux de lecture compris. Vérifié en les comparant à ce que la
+     * table rend directement : une ligne manquante ici est une consultation qu'on
+     * ne verra jamais.
+     */
+    const attendues = banc.sql(
+      "select id::text from public.acces_administrateurs order by quand desc, id desc limit 60;")
+      .sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    // La table a grandi de six lignes pendant le parcours — une par lecture —, et
+    // ces six-là sont en tête : on compare donc sur ce que les deux ont en commun.
+    const communes = attendues.filter((un) => vues.includes(un));
+    assert.ok(communes.length >= 54,
+      `${60 - communes.length} lignes du journal ont été sautées`);
+  });
+
+/**
+ * **La moyenne recouvre deux mondes, et la médiane dit lequel.**
+ *
+ * Quatre chantiers à un document et un à vingt donnent la même moyenne que cinq
+ * à cinq — et ce n'est pas le même produit : le premier appelle un tarif à
+ * l'usage, le second un forfait. C'est l'épreuve qui justifie de rendre quatre
+ * nombres au lieu d'un.
+ */
+test("les documents par chantier donnent moyenne, médiane et extrêmes",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      delete from public.documents;
+      delete from public.projects where id not in
+        ('${MEDIATHEQUE}', '22222222-2222-4222-8222-222222222222', '${GYMNASE}',
+         '44444444-4444-4444-8444-444444444444');
+
+      -- Quatre chantiers à un document, un à vingt. Moyenne 4,8 ; médiane 1.
+      insert into public.documents (project_id, created_by, storage_bucket, file_size_bytes)
+      select '${MEDIATHEQUE}', '${A}', 'documents', 1000 from generate_series(1, 20);
+      insert into public.documents (project_id, created_by, storage_bucket, file_size_bytes)
+        values ('22222222-2222-4222-8222-222222222222', '${A}', 'documents', 500),
+               ('${GYMNASE}', '${A}', 'documents', 500),
+               ('44444444-4444-4444-8444-444444444444', '${A}', 'mails', 2000);`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select documents_par_chantier ->> 'moyenne', documents_par_chantier ->> 'mediane',"
+      + " documents_par_chantier ->> 'minimum', documents_par_chantier ->> 'maximum'"
+      + " from public.lexploitation_de_mdall();");
+    assert.equal(lu.ok, true, lu.motif);
+
+    // Quatre chantiers : 20, 1, 1, 1. Moyenne 5,8 ; médiane 1 ; de 1 à 20.
+    assert.equal(leChamp(lu.sortie, 0), "5.8", lu.sortie);
+    assert.equal(leChamp(lu.sortie, 1), "1",
+      `la médiane suit la moyenne : la forme de la distribution est perdue (${lu.sortie})`);
+    assert.equal(leChamp(lu.sortie, 2), "1", lu.sortie);
+    assert.equal(leChamp(lu.sortie, 3), "20", lu.sortie);
+  });
+
+/**
+ * **Les octets se comptent par casier, et les effacés à part.**
+ *
+ * Un document effacé occupe encore des octets tant que rien ne l'a retiré du
+ * casier. Le compter avec les vivants ferait une jauge fausse ; ne pas le
+ * compter du tout ferait croire un effacement RGPD accompli alors que les octets
+ * sont toujours là (règle 5).
+ */
+test("le stockage se compte par casier, et les effacés se comptent à part",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      update public.documents set deleted_at = now()
+      where project_id = '${GYMNASE}';`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select octets_par_casier::text, documents, documents_effaces"
+      + " from public.lexploitation_de_mdall();");
+    assert.equal(lu.ok, true, lu.motif);
+
+    // Vingt documents à mille octets dans « documents », plus un à cinq cents
+    // — l'effacé n'y est plus. Et deux mille dans « mails ».
+    assert.match(lu.sortie, /"casier":\s*"documents",\s*"octets":\s*20500/, lu.sortie);
+    assert.match(lu.sortie, /"casier":\s*"mails",\s*"octets":\s*2000/, lu.sortie);
+    assert.equal(leChamp(lu.sortie, 1), "22", lu.sortie);
+    assert.equal(leChamp(lu.sortie, 2), "1",
+      `un effacé n'est pas compté à part : ${lu.sortie}`);
+
+    banc.sql(`update public.documents set deleted_at = null where project_id = '${GYMNASE}';`);
+  });
+
+/**
+ * **Inscrit et jamais revenu, c'est le premier chiffre d'une cohorte.**
+ *
+ * `last_sign_in_at` est la seule trace que Mdall garde sans la fabriquer : il n'y
+ * a pas de table de séances. Rendre `0` pour qui n'est jamais revenu le
+ * confondrait avec quelqu'un venu à l'époque zéro (règle 5).
+ */
+test("l'exploitation distingue qui est revenu de qui n'est jamais revenu",
+  { skip: sansPostgres }, () => {
+    /**
+     * **Toutes les venues sont posées, et non seulement celles de A et B.**
+     *
+     * Les comptes des autres épreuves vivent dans la même base. Compter sur eux
+     * aurait donné une épreuve qui passe ou tombe selon ce qui a tourné avant —
+     * et une épreuve qui dépend de son voisin ne prouve rien.
+     */
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      update auth.users set last_sign_in_at = null, deleted_at = null;
+      update auth.users set last_sign_in_at = now() - interval '2 days' where id = '${A}';
+      update auth.users set last_sign_in_at = now() - interval '15 days' where id = '${B}';`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select comptes, venus_7j, venus_30j, jamais_revenus"
+      + " from public.lexploitation_de_mdall();");
+    assert.equal(lu.ok, true, lu.motif);
+
+    const comptes = Number(leChamp(lu.sortie, 0));
+
+    /**
+     * **Quinze jours, c'est dans le mois et pas dans la semaine.**
+     *
+     * Les deux fenêtres doivent donc rendre deux nombres différents. Avec un seul
+     * compte venu il y a deux jours, elles auraient rendu le même — et l'une des
+     * deux aurait pu lire la fenêtre de l'autre sans que rien ne le dise.
+     */
+    assert.equal(leChamp(lu.sortie, 1), "1",
+      `la fenêtre de sept jours compte autre chose que la venue d'avant-hier : ${lu.sortie}`);
+    assert.equal(leChamp(lu.sortie, 2), "2",
+      `la fenêtre de trente jours n'attrape pas la venue d'il y a quinze jours : ${lu.sortie}`);
+
+    // Tous les autres comptes n'ont aucune venue : ils sont « jamais revenus ».
+    assert.equal(Number(leChamp(lu.sortie, 3)), comptes - 2, lu.sortie);
+
+    /**
+     * **Une venue d'il y a deux mois n'est dans aucune des deux fenêtres, et ne
+     * devient pas « jamais revenu » pour autant.**
+     *
+     * Les confondre effacerait la différence entre quelqu'un qui n'est jamais
+     * venu et quelqu'un qui ne revient plus — et c'est le second qu'une cohorte
+     * de retour cherche (règle 5).
+     */
+    banc.sql(`update auth.users set last_sign_in_at = now() - interval '60 days'
+              where id = '${A}';
+      update auth.users set last_sign_in_at = null where id = '${B}';`);
+    const vieux = banc.sousLadresse("patron@mdall.example",
+      "select comptes, venus_7j, venus_30j, jamais_revenus from public.lexploitation_de_mdall();");
+    assert.equal(leChamp(vieux.sortie, 1), "0", vieux.sortie);
+    assert.equal(leChamp(vieux.sortie, 2), "0", vieux.sortie);
+    assert.equal(Number(leChamp(vieux.sortie, 3)), Number(leChamp(vieux.sortie, 0)) - 1,
+      `le revenant d'il y a deux mois est compté « jamais revenu » : ${vieux.sortie}`);
+  });
+
+/**
+ * **Signée veut dire entrée en mémoire.**
+ *
+ * Une proposition ouverte n'a rien versé ; une abandonnée n'a rien versé non
+ * plus. Compter les trois ferait annoncer une mémoire qui n'existe pas, et le
+ * chiffre serait celui qu'on montre pour dire ce que le produit a fait.
+ */
+test("l'exploitation ne compte que les propositions signées",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      delete from public.propositions;
+      insert into public.propositions (project_id, status) values
+        ('${MEDIATHEQUE}', 'merged'), ('${MEDIATHEQUE}', 'merged'),
+        ('${MEDIATHEQUE}', 'open'), ('${MEDIATHEQUE}', 'closed');`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select propositions_signees from public.lexploitation_de_mdall();");
+    assert.equal(lu.ok, true, lu.motif);
+    assert.equal(lu.sortie.trim(), "2",
+      `les propositions non signées sont comptées : ${lu.sortie}`);
+  });
+
+/**
+ * **Chaque regard sur l'exploitation laisse sa trace.**
+ *
+ * C'est la règle de la console : on ne consulte pas sans que cela se sache. Les
+ * trois fonctions de l'exploitation passent par la même porte, et chacune nomme
+ * sa page — sans quoi le journal dirait « quelqu'un a regardé » sans dire quoi.
+ */
+test("chaque page de l'exploitation s'inscrit au journal sous son nom",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      delete from public.acces_administrateurs;`);
+
+    banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.la_sante_des_systemes(12);");
+    banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.lexploitation_de_mdall();");
+
+    const pages = banc.sql(
+      "select page || '[' || filtre || ']' from public.acces_administrateurs order by page;");
+    const lignes = pages.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+
+    assert.ok(lignes.some((une) => une === "exploitation/sante[heures=12]"),
+      `la santé ne nomme pas sa fenêtre : ${lignes.join(" | ")}`);
+    assert.ok(lignes.some((une) => une === "exploitation/usage[]"),
+      `l'usage ne nomme pas sa page : ${lignes.join(" | ")}`);
+  });

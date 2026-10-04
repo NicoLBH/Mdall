@@ -58,6 +58,15 @@ export const LE_CARBURANT = "carburant";
 /** Celle des comptes : la première question d'exploitation — qui est là. */
 export const LES_COMPTES = "comptes";
 
+/** La santé des systèmes : est-ce que cela répond, et depuis quand. */
+export const LA_SANTE = "sante";
+
+/** L'usage : le stockage, les documents, les venues. */
+export const LUSAGE = "usage";
+
+/** Le journal des consultations de la console. */
+export const LES_CONSULTATIONS = "consultations";
+
 export const LES_RUBRIQUES = [
   {
     cle: LES_COMPTES,
@@ -67,6 +76,35 @@ export const LES_RUBRIQUES = [
     question: "Qui est là, et qu'est-ce que chacun a fait ?",
     explication: "Un nom, une adresse, ses chantiers, ses sujets comptés et ce "
       + "que l'IA lui a coûté. Jamais ce qu'il a écrit."
+  },
+  {
+    cle: LA_SANTE,
+    onglet: ONGLET.EXPLOITATION,
+    libelle: "La santé des systèmes",
+    icone: "pulse",
+    question: "Est-ce que cela répond, et depuis quand ?",
+    explication: "Lu dans les traces de Mdall, et non sur la page d'état d'un "
+      + "fournisseur : celle-ci est verte quand notre clé est révoquée. Et "
+      + "« aucune trace » s'y lit « on ne sait pas »."
+  },
+  {
+    cle: LUSAGE,
+    onglet: ONGLET.EXPLOITATION,
+    libelle: "L'usage",
+    icone: "meter",
+    question: "Combien d'octets, de documents, de chantiers — et qui est venu ?",
+    explication: "La moyenne par chantier recouvre deux produits différents : la "
+      + "médiane et les extrêmes disent lequel. Les documents effacés s'y "
+      + "comptent à part, parce que leurs octets restent."
+  },
+  {
+    cle: LES_CONSULTATIONS,
+    onglet: ONGLET.EXPLOITATION,
+    libelle: "Les consultations",
+    icone: "history",
+    question: "Qui a ouvert quelle page de la console, et quand ?",
+    explication: "Le journal des accès administrateurs. Il se lit, il ne s'efface "
+      + "pas — et le lire s'y inscrit aussi."
   },
   {
     cle: LE_CARBURANT,

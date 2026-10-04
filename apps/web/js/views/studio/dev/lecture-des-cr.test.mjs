@@ -3046,3 +3046,46 @@ test("un chantier inconnu ne décide de rien", () => {
 test("les espaces autour d'un identifiant ne font pas un autre chantier", () => {
   assert.equal(leChantierAChange(" p-1 ", "p-1"), false);
 });
+
+/* ── Les mails se lisent d'ici ────────────────────────────────── */
+
+test("sept mails choisis annoncent sept mails, et non sept fils", () => {
+  // Les deux autres familles lisent un document et rendent une lecture : choisir
+  // sept rapports donne sept lectures. Sept mails donnent **un** fil —
+  // « Lire 7 fils » annoncerait sept lectures et sept appels.
+  const choix = {
+    dossier: "", breadcrumb: [], entrees: Array.from({ length: 7 }, (rien, rang) => ({
+      type: "fichier", id: `m-${rang}`, nom: `mail-${rang}.eml`, choisissable: true,
+      pourquoi: "", lecture: "mail"
+    }))
+  };
+  const coches = new Set(choix.entrees.map((une) => une.id));
+  const connues = new Map(choix.entrees.map((une) => [une.id, une]));
+
+  const html = renderLaLecture(unEtat({ famille: "mails", choix, coches, connues }));
+  assert.match(html, /Lire\s*7\s*mails/);
+  assert.doesNotMatch(html, /Lire\s*7\s*fils/);
+});
+
+test("la barre dit qu'un fil est un seul appel, et qu'il faut rester", () => {
+  // Le relèvement d'un fil se fait dans le navigateur : fermer l'écran au milieu
+  // perdrait la lecture qu'on vient de payer (règle 5). Les rapports, eux,
+  // partent au serveur et l'écran peut se fermer — deux économies, deux phrases.
+  const choix = {
+    dossier: "", breadcrumb: [], entrees: [{
+      type: "fichier", id: "m-1", nom: "fil.eml", choisissable: true, pourquoi: "", lecture: "mail"
+    }]
+  };
+  const coches = new Set(["m-1"]);
+  const connues = new Map([["m-1", choix.entrees[0]]]);
+
+  const mails = renderLaLecture(unEtat({ famille: "mails", choix, coches, connues }));
+  assert.match(mails, commeAffichee("un seul fil, relevé en un seul appel"));
+  assert.match(mails, commeAffichee("restez sur cet écran"));
+
+  const rapports = renderLaLecture(unEtat({
+    famille: "rapports", choix, coches, connues
+  }));
+  assert.match(rapports, commeAffichee("Vous pouvez fermer cet écran"));
+  assert.doesNotMatch(rapports, commeAffichee("un seul fil"));
+});

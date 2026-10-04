@@ -48,6 +48,10 @@ create table if not exists public.documents (
   -- que `202611110001_...` décide de sa visibilité : sans la colonne, la règle
   -- ne se déploie pas, et sans elle dans le socle on ne l'éprouve pas.
   proposition_id uuid,
+  -- **Les octets du fichier.** C'est la seule mesure du stockage qu'on ait :
+  -- `lexploitation_de_mdall()` les somme par casier. Sans la colonne, la
+  -- fonction ne se déploie pas, et c'est ici qu'on veut l'apprendre.
+  file_size_bytes bigint,
   deleted_at timestamptz,
   created_at timestamptz not null default now()
 );
@@ -342,7 +346,10 @@ create policy "proposition_notes_open_all" on public.proposition_notes
   for all to anon, authenticated using (true) with check (true);
 create table if not exists public.propositions (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid references public.projects(id) on delete cascade
+  project_id uuid references public.projects(id) on delete cascade,
+  -- `open` | `merged` | `closed`. L'exploitation compte les signées, c'est-à-dire
+  -- les `merged` : ce qui est réellement entré en mémoire.
+  status text not null default 'open'
 );
 alter table public.propositions enable row level security;
 create policy "propositions_open_all" on public.propositions

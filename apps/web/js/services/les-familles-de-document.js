@@ -170,6 +170,19 @@ export const CE_QUE_DIT_LA_FAMILLE = {
     titre: "Mails",
     icone: "mail",
     quoi: { un: "fil", plusieurs: "fils" },
+    /**
+     * **Ce qu'on choisit n'est pas ce qu'on obtient**, et c'est propre à cette
+     * famille.
+     *
+     * Les deux autres lisent un document et rendent une lecture : choisir sept
+     * rapports donne sept lectures, et « Lire 7 rapports » dit vrai. Sept mails
+     * choisis, eux, donnent **un** fil — « Lire 7 fils » annoncerait sept
+     * lectures et sept appels, alors qu'il n'y en aura qu'un.
+     *
+     * Les autres familles ne déclarent rien ici : sans cette entrée, c'est `quoi`
+     * qui sert, et il dit juste pour elles.
+     */
+    quoiAuChoix: { un: "mail", plusieurs: "mails" },
     vide: {
       titre: "Aucun fil de mails analysé",
       quoi: "Un ou plusieurs .eml : le fil se déplie, et les prises de position se "

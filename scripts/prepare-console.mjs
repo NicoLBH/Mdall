@@ -116,6 +116,26 @@ export const RACINES = [
   // chiffre qu'on vient vérifier ici.
   "js/views/consommation/ecran-de-consommation.js",
   "js/views/ui/le-choix-de-la-periode.js",
+  // ── L'onglet Exploitation ───────────────────────────────────────────────
+  //
+  // La santé des systèmes, lue dans **nos propres traces** : le dernier appel
+  // abouti, le dernier octet rangé, la dernière ligne de file prise, et les
+  // refus par genre. Pas une page d'état de fournisseur — celle-ci est verte
+  // quand notre clé est révoquée.
+  //
+  // Le verdict est pur, et c'est ce qui permet d'écrire « aucune trace » à
+  // l'envers dans une épreuve : une absence ne doit jamais se lire
+  // « tout va bien ».
+  "js/services/la-sante-des-systemes.js",
+  // Le stockage, les documents par chantier, les venues, et le journal des
+  // consultations. Des octets, des comptes, des dates, des noms de casier et de
+  // page de console — **jamais un nom de fichier**. La cloison le vérifie.
+  "js/services/lexploitation-de-mdall.js",
+  "js/services/lexploitation-de-mdall-supabase.js",
+  // Les genres de panne et leurs remèdes, pris là où l'écran de l'utilisateur
+  // les prend déjà : deux listes auraient fini par conseiller deux gestes
+  // différents pour la même panne (règle 4).
+  "js/services/journal-des-refus.js",
   // Le tableau de partout, sa pagination et sa barre d'outils : rien n'est
   // dessiné pour la console.
   "js/views/ui/data-table-shell.js",

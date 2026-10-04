@@ -855,17 +855,42 @@ function lesMotsDuChoix(famille) {
   const ce = laFamilleQuiSeLit(famille) ?? ceQueDitLaFamille(FAMILLE.CR);
 
   return {
-    quoi: ce.quoi,
+    // **Ce qu'on choisit n'est pas toujours ce qu'on obtient.** Sept mails
+    // choisis donnent un fil : « Lire 7 fils » annoncerait sept appels. Le
+    // registre le dit pour la seule famille concernée.
+    quoi: ce.quoiAuChoix ?? ce.quoi,
     /**
      * `null` garde la phrase des propositions, qui est celle des comptes rendus.
      * Les autres familles disent ce qui les attend vraiment : une lecture
      * conservée, et rien en mémoire.
      */
-    fera: famille === FAMILLE.CR || !famille
-      ? null
-      : "Chaque document est lu sur le serveur, et sa lecture est conservée. "
-        + "Vous pouvez fermer cet écran. Rien n'entre dans la mémoire du chantier."
+    fera: ceQueLeChoixFera(famille)
   };
+}
+
+/**
+ * Ce que la barre annonce qu'il va se passer.
+ *
+ * Trois phrases, et chacune décrit une économie différente :
+ *
+ *  - **un compte rendu** ouvre une proposition à signer. C'est la phrase par
+ *    défaut du composant, et elle est juste pour lui ;
+ *  - **un rapport** se lit au serveur et sa lecture se garde : on peut fermer
+ *    l'écran, et rien n'entre en mémoire ;
+ *  - **des mails** font **un seul fil**, relevé en un seul appel — et celui-là
+ *    se fait ici, donc il faut rester. Le taire ferait fermer l'écran au milieu,
+ *    et perdre la lecture qu'on vient de payer (règle 5).
+ */
+function ceQueLeChoixFera(famille) {
+  if (famille === FAMILLE.MAIL) {
+    return "Les mails choisis forment un seul fil, relevé en un seul appel. "
+      + "Le relèvement se fait ici : restez sur cet écran le temps qu'il revienne. "
+      + "Rien n'entre dans la mémoire du chantier.";
+  }
+  if (famille === FAMILLE.CR || !famille) return null;
+
+  return "Chaque document est lu sur le serveur, et sa lecture est conservée. "
+    + "Vous pouvez fermer cet écran. Rien n'entre dans la mémoire du chantier.";
 }
 
 /**
@@ -3638,12 +3663,30 @@ async function ouvrirLeChoix(hote, dossierId = "") {
     const { listDocumentDirectory } = await import("../../../services/project-supabase-sync.js");
     const contenu = await listDocumentDirectory(projectId, texte(dossierId) || null);
 
-    const entrees = entreesDuDossier(contenu);
+    // **La famille ouverte décide de ce qui se choisit.** Un `.eml` proposé sous
+    // « Bureau de contrôle » disait « Mdall ne sait pas lire ce format » — faux,
+    // et de la pire façon : on en concluait que le format n'était pas pris en
+    // charge, et l'on ne cherchait plus ailleurs (règle 5).
+    const entrees = entreesDuDossier(contenu, etat.famille);
     // **Ce qu'on a vu reste su.** La barre de lancement doit dire combien de PDF
     // la file contient ; un document coché dans un dossier qu'on a quitté n'est
     // plus dans `entrees`, et sans cette mémoire le coût annoncé aurait baissé
     // en changeant de dossier.
-    for (const une of entrees) etat.connues.set(une.id, une);
+    /**
+     * **La ligne brute voyage avec l'entrée.**
+     *
+     * Les deux autres familles n'en ont pas besoin : le serveur relit le
+     * document par son identifiant, sous l'identité de celui qui demande. La
+     * lecture d'un fil, elle, descend les octets **ici** — et pour cela il faut
+     * savoir dans quel casier et à quel chemin ils sont. Les redemander dossier
+     * par dossier au moment du lancement aurait raté les mails qu'on a cochés
+     * ailleurs, puisqu'un fil traverse les dossiers.
+     */
+    const parId = new Map((Array.isArray(contenu?.files) ? contenu.files : [])
+      .map((une) => [texte(une?.id), une]));
+    for (const une of entrees) {
+      etat.connues.set(une.id, { ...une, ligne: parId.get(une.id) ?? null });
+    }
 
     etat.choix = {
       dossier: texte(dossierId),
@@ -3807,6 +3850,14 @@ async function lancerLaFile(hote) {
     return;
   }
 
+  // **Les mails ne vont pas en file, et c'est raisonné.** Un fil est un appel,
+  // pas un lot : il monte une fois, tous ses messages ensemble. Voir
+  // `services/lire-un-fil-de-mails.js` pour ce qui ferait changer d'avis.
+  if (etat.famille === FAMILLE.MAIL) {
+    await lireLeFilChoisi(hote, documents, projectId);
+    return;
+  }
+
   // Chargé à la demande : ce module passe par le SDK Supabase, importé depuis le
   // réseau, qu'une exécution hors navigateur ne saurait résoudre.
   const { demanderUneLecture } = await import(
@@ -3842,6 +3893,79 @@ async function lancerLaFile(hote) {
 
   // Ce qui part devient une ligne « en attente » du tableau : la relire tout de
   // suite évite d'avoir à recharger l'écran pour voir son propre geste.
+  void chargerLesLecturesGardees(hote);
+  redessiner(hote);
+}
+
+/**
+ * Lire le fil des mails choisis, et conserver la lecture.
+ *
+ * ## Les deux allers-retours sont passés au service
+ *
+ * `lireUnFilDeMails` décide de l'ordre et de ce qu'un échec laisse passer ; il
+ * n'appelle le réseau nulle part. Ce qui est ici est le câblage : d'où viennent
+ * les octets, qui relit le fil, et où la lecture se garde.
+ *
+ * ## Ce que l'écran dit, et quand
+ *
+ * Il reste pris pendant la lecture, contrairement au lancement d'une file. C'est
+ * la conséquence assumée de ne pas passer par le serveur : quelques secondes
+ * d'attente, pendant lesquelles l'étape en cours est nommée. L'alternative —
+ * rendre la main et prévenir plus tard — demanderait la file, qu'un seul appel
+ * ne justifie pas.
+ */
+async function lireLeFilChoisi(hote, documents, projectId) {
+  const [{ lireUnFilDeMails, leMotDuFilLu, phraseDuRefusDuFil }, stockage, messages, modele] =
+    await Promise.all([
+      import("../../../services/lire-un-fil-de-mails.js"),
+      import("../../../services/fichier-a-la-main-supabase.js"),
+      import("../../../services/les-messages-dun-fichier.js"),
+      import("../../../services/prises-par-le-modele.js")
+    ]);
+
+  const lu = await lireUnFilDeMails(documents, {
+    octetsDu: async (document) => {
+      // La ligne brute, gardée au listage : c'est elle qui dit le casier et le
+      // chemin. Un mail coché dans un dossier qu'on a quitté garde la sienne.
+      const ligne = etat.connues.get(document.id)?.ligne ?? null;
+      const octets = ligne ? await stockage.lireLesOctetsDuFichier(ligne) : null;
+      return octets ? { octets, nom: texte(document?.nom) } : null;
+    },
+    messagesDe: async (octets, nom) => messages.lesMessagesDunFichier(
+      new File([octets], nom || "mail.eml")
+    ),
+    releverLeFil: modele.releverLeFil,
+    onEtape: ({ quoi }) => {
+      etat.choix = { ...(etat.choix ?? {}), enCours: true, etape: quoi };
+      redessiner(hote);
+    }
+  });
+
+  if (!lu.ok) {
+    etat.choix = {
+      ...etat.choix, enCours: false, etape: "",
+      motif: `Le fil n'a pas pu être lu : ${phraseDuRefusDuFil(lu.motif)}.`
+    };
+    redessiner(hote);
+    return;
+  }
+
+  // **La lecture se conserve dans la même table que l'ancien utilitaire.** C'est
+  // elle que le tableau de cet écran lit déjà, et que son détail sait rouvrir :
+  // une seconde table aurait fait deux listes de fils lus (règle 4).
+  const [{ laLigneDunFil }, base] = await Promise.all([
+    import("../../../services/la-lecture-dun-fil.js"),
+    import("../../../services/lectures-du-fil-supabase.js")
+  ]);
+
+  const ligne = laLigneDunFil(lu.vue, { projectId });
+  if (ligne) await base.conserverUneLectureDeFil(ligne);
+
+  etat.choix = null;
+  etat.coches = new Set();
+  etat.depotOuvert = false;
+  etat.lance = leMotDuFilLu(lu);
+
   void chargerLesLecturesGardees(hote);
   redessiner(hote);
 }
