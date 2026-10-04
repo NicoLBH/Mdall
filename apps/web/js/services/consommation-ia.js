@@ -292,10 +292,25 @@ export function appelPourLEcran(ligne = {}) {
  * `sansDecompte` compte les appels dont le fournisseur n'a rien annoncé : un
  * total qui les tairait serait faux d'un montant qu'on ne peut pas nommer.
  * Les afficher, c'est dire de combien on se trompe.
+ *
+ * ## Une ligne peut en valoir plusieurs
+ *
+ * `combien` vaut 1 par défaut : un appel est un appel. Mais la console lit la
+ * consommation d'un compte **déjà groupée en base** — par pas et par modèle,
+ * parce que rendre dix mille lignes pour en faire douze points serait dix mille
+ * lignes de trop. Une ligne groupée porte alors les jetons de ses `combien`
+ * appels, et c'est ce nombre qui compte.
+ *
+ * **Le tarif, lui, ne se recopie pas pour autant.** Le coût est proportionnel
+ * aux jetons : la somme des jetons de quarante appels d'un même modèle coûte
+ * exactement ce que coûtent les quarante. C'est ce qui permet de grouper sans
+ * écrire un second barème en SQL (règle 4) — et un second barème, c'est un
+ * montant qui diverge de la facture le jour où l'on relève un tarif.
  */
 export function totalDesAppels(appels = []) {
   const liste = Array.isArray(appels) ? appels : [];
 
+  let appelsComptes = 0;
   let entree = 0;
   let sortie = 0;
   let euros = 0;
@@ -303,8 +318,15 @@ export function totalDesAppels(appels = []) {
   let sansTarif = 0;
 
   for (const appel of liste) {
+    // **Zéro n'est pas « non précisé ».** Une ligne groupée qui porterait
+    // `combien: 0` ne vaudrait aucun appel ; l'absence, elle, en vaut un.
+    const combien = appel?.combien === null || appel?.combien === undefined
+      ? 1
+      : Math.max(0, Math.trunc(nombre(appel.combien)));
+    appelsComptes += combien;
+
     if (appel?.entree === null && appel?.sortie === null) {
-      sansDecompte += 1;
+      sansDecompte += combien;
       continue;
     }
 
@@ -317,12 +339,12 @@ export function totalDesAppels(appels = []) {
       outputTokens: appel?.sortie
     });
 
-    if (cout === null) sansTarif += 1;
+    if (cout === null) sansTarif += combien;
     else euros += cout;
   }
 
   return {
-    appels: liste.length,
+    appels: appelsComptes,
     entree,
     sortie,
     jetons: entree + sortie,
@@ -335,41 +357,6 @@ export function totalDesAppels(appels = []) {
 /** Le jour d'un appel, en ISO court. */
 export function jourDeLAppel(appel = {}) {
   return texte(appel?.le).slice(0, 10);
-}
-
-/**
- * La consommation jour par jour, sur une fenêtre continue.
- *
- * **Tous les jours de la fenêtre, y compris les vides.** Une courbe qui saute
- * les jours sans appel rapproche visuellement deux dates éloignées : on lit une
- * activité continue là où il y a eu une semaine de silence.
- *
- * @param {object[]} appels
- * @param {object} options
- * @param {string} options.du premier jour, en ISO court
- * @param {string} options.au dernier jour, inclus
- */
-export function parJour(appels = [], { du = "", au = "" } = {}) {
-  const debut = texte(du).slice(0, 10);
-  const fin = texte(au).slice(0, 10);
-  if (!debut || !fin || debut > fin) return [];
-
-  const parDate = new Map();
-  for (const appel of Array.isArray(appels) ? appels : []) {
-    const jour = jourDeLAppel(appel);
-    if (!jour || jour < debut || jour > fin) continue;
-    if (!parDate.has(jour)) parDate.set(jour, []);
-    parDate.get(jour).push(appel);
-  }
-
-  const jours = [];
-  for (let curseur = new Date(`${debut}T00:00:00Z`); ; curseur.setUTCDate(curseur.getUTCDate() + 1)) {
-    const jour = curseur.toISOString().slice(0, 10);
-    if (jour > fin) break;
-    jours.push({ jour, ...totalDesAppels(parDate.get(jour) ?? []) });
-  }
-
-  return jours;
 }
 
 /**
@@ -466,4 +453,314 @@ export function bornesDuMois(mois) {
   const [annee, numero] = cle.split("-").map(Number);
   const dernier = new Date(Date.UTC(annee, numero, 0)).getUTCDate();
   return { du: `${cle}-01`, au: `${cle}-${String(dernier).padStart(2, "0")}` };
+}
+
+/* ── Le pas de lecture ──────────────────────────────────────── */
+
+/**
+ * À quel pas on regarde le temps.
+ *
+ * ## Le défaut que cela répare
+ *
+ * L'écran ne savait montrer qu'**un mois, jour par jour**. C'est la bonne vue
+ * pour « combien ce mois-ci », et la mauvaise pour la seule question qui compte
+ * ensuite : « est-ce que cela monte ? ». Un mois seul ne répond jamais à celle-là
+ * — il faut les douze précédents à côté.
+ */
+export const PAS = {
+  /** Les jours d'un mois. */
+  JOUR: "jour",
+  /** Les douze mois qui finissent à celui qu'on regarde. */
+  MOIS: "mois",
+  /** Les cinq années qui finissent à celle qu'on regarde. */
+  ANNEE: "annee"
+};
+
+/**
+ * Sur combien de pas la fenêtre remonte, quand ce n'est pas un mois.
+ *
+ * **Douze mois**, parce que c'est l'année glissante : on compare un mois à son
+ * homologue de l'an passé, et un hiver à un hiver.
+ *
+ * **Cinq ans**, parce qu'au-delà l'axe porterait des années où Mdall n'existait
+ * pas — des zéros qui se lisent comme une chute.
+ */
+export const COMBIEN_DE_MOIS = 12;
+export const COMBIEN_DANNEES = 5;
+
+/** Les mois, en trois lettres, pour un axe qui en porte douze. */
+const MOIS_COURTS = [
+  "jan", "fév", "mar", "avr", "mai", "jun",
+  "jui", "aoû", "sep", "oct", "nov", "déc"
+];
+
+/**
+ * Un mois décalé de tant de mois — « 2026-01 » reculant de deux donne
+ * « 2025-11 ».
+ *
+ * Par un `Date` en UTC, et non par une arithmétique à la main sur le numéro :
+ * c'est le passage de décembre à janvier qui se trompe, et il ne se trompe
+ * qu'une fois par an.
+ */
+export function moisDecale(mois, de = 0) {
+  const cle = texte(mois).slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(cle)) return "";
+
+  const [annee, numero] = cle.split("-").map(Number);
+  const quand = new Date(Date.UTC(annee, numero - 1 + Math.trunc(nombre(de)), 1));
+  return quand.toISOString().slice(0, 7);
+}
+
+/**
+ * Les derniers mois, du plus récent au plus ancien, pour le menu des périodes.
+ *
+ * **Du plus récent au plus ancien**, parce qu'on vient voir le mois en cours ou
+ * le précédent neuf fois sur dix : les ranger à l'endroit obligerait à descendre
+ * la liste pour atteindre le cas courant.
+ */
+export function lesMoisARemonter(combien = COMBIEN_DE_MOIS, depuis = "") {
+  const fin = /^\d{4}-\d{2}/.test(texte(depuis)) ? texte(depuis).slice(0, 7) : moisEnCours();
+  const combienDe = Math.max(1, Math.trunc(nombre(combien)) || COMBIEN_DE_MOIS);
+
+  const mois = [];
+  for (let recul = 0; recul < combienDe; recul += 1) {
+    const cle = moisDecale(fin, -recul);
+    if (!cle) break;
+    mois.push({ cle, dit: moisEnFrancais(cle) });
+  }
+  return mois;
+}
+
+/**
+ * Ce que chaque pas sait de lui-même.
+ *
+ * **Un registre, et non trois boucles.** Écrire « par jour », « par mois » et
+ * « par an » l'une après l'autre aurait fait trois fois la même chose à une
+ * troncature près — et la troisième aurait oublié les pas vides, que la
+ * première avait appris à garder (règle 4).
+ */
+const LE_PAS = {
+  [PAS.JOUR]: {
+    nom: "Par jour",
+    titre: "Consommation par jour",
+    /** La fenêtre : le mois qu'on regarde. */
+    fenetreDe: (mois) => bornesDuMois(mois),
+    cleDe: (jour) => texte(jour).slice(0, 10),
+    suivante: (cle) => {
+      const quand = new Date(`${cle}T00:00:00Z`);
+      quand.setUTCDate(quand.getUTCDate() + 1);
+      return quand.toISOString().slice(0, 10);
+    },
+    // Le jour du mois seul : la date entière, répétée trente fois, ne tient pas
+    // sous un axe et ne dit rien de plus.
+    dit: (cle) => cle.slice(8),
+    enClair: (cle) => cle
+  },
+
+  [PAS.MOIS]: {
+    nom: "Par mois",
+    titre: `Consommation par mois — ${COMBIEN_DE_MOIS} derniers mois`,
+    fenetreDe: (mois) => ({
+      du: `${moisDecale(mois, -(COMBIEN_DE_MOIS - 1))}-01`,
+      au: bornesDuMois(mois).au
+    }),
+    cleDe: (jour) => texte(jour).slice(0, 7),
+    suivante: (cle) => moisDecale(cle, 1),
+    dit: (cle) => MOIS_COURTS[Number(cle.slice(5, 7)) - 1] ?? cle,
+    enClair: (cle) => moisEnFrancais(cle)
+  },
+
+  [PAS.ANNEE]: {
+    nom: "Par an",
+    titre: "Consommation par an",
+    fenetreDe: (mois) => {
+      const annee = Number(texte(mois).slice(0, 4));
+      if (!Number.isFinite(annee) || annee <= 0) return { du: "", au: "" };
+      return { du: `${annee - (COMBIEN_DANNEES - 1)}-01-01`, au: `${annee}-12-31` };
+    },
+    cleDe: (jour) => texte(jour).slice(0, 4),
+    suivante: (cle) => String(Number(cle) + 1),
+    dit: (cle) => cle,
+    enClair: (cle) => cle
+  }
+};
+
+/** Les pas, pour le menu qui les propose. */
+export const LES_PAS = Object.keys(LE_PAS).map((cle) => ({ cle, nom: LE_PAS[cle].nom }));
+
+/** Le pas demandé, ramené à l'un de ceux qui existent. */
+export function lePasValide(pas) {
+  const voulu = texte(pas);
+  return Object.hasOwn(LE_PAS, voulu) ? voulu : PAS.JOUR;
+}
+
+/** Ce que ce pas met en titre de courbe. */
+export function leTitreDuPas(pas) {
+  return LE_PAS[lePasValide(pas)].titre;
+}
+
+/**
+ * La fenêtre à lire en base, pour un pas et un mois choisi.
+ *
+ * **Elle dépend du pas, et c'est tout le point.** Demander « par mois » en ne
+ * lisant qu'un mois donnerait un point unique — une courbe qui ne monte ni ne
+ * descend, ce qui est la réponse la plus trompeuse possible (règle 5).
+ */
+export function laFenetreDe({ pas = PAS.JOUR, mois = "" } = {}) {
+  const cle = /^\d{4}-\d{2}/.test(texte(mois)) ? texte(mois).slice(0, 7) : moisEnCours();
+  return LE_PAS[lePasValide(pas)].fenetreDe(cle);
+}
+
+/**
+ * Ce qui désigne une lecture : **le pas autant que le mois**.
+ *
+ * ## Le défaut que cela évite
+ *
+ * Un écran qui garde ce qu'il a lu doit savoir quand ce qu'il garde ne vaut
+ * plus. Si la clé ne portait que le mois, passer de « par jour » à « par mois »
+ * ne relirait rien : on dessinerait douze mois à partir d'un seul mois d'appels.
+ * La courbe s'arrêterait net à la fin du mois lu, et se lirait comme un
+ * effondrement de la consommation — un chiffre faux, obtenu sans erreur
+ * (règle 5).
+ */
+export function laCleDeLaFenetre({ pas = PAS.JOUR, mois = "" } = {}) {
+  const cle = /^\d{4}-\d{2}/.test(texte(mois)) ? texte(mois).slice(0, 7) : moisEnCours();
+  return `${lePasValide(pas)}@${cle}`;
+}
+
+/**
+ * Ce que la fenêtre couvre, en toutes lettres.
+ *
+ * ## Le défaut que cela répare
+ *
+ * L'écran écrivait « Ma consommation — octobre 2026 » quelle que soit la
+ * fenêtre. En passant « par mois », il lisait douze mois et continuait à dire
+ * « octobre » : un total de douze mois annoncé comme celui d'un seul, c'est-à-dire
+ * un montant faux de onze mois, affiché sans la moindre erreur (règle 5).
+ *
+ * **Le mois choisi reste nommé**, même quand la fenêtre est plus large : c'est
+ * lui qu'on a cliqué, et c'est par lui qu'on comprend où la fenêtre s'arrête.
+ */
+export function ceQueLaFenetreDit({ pas = PAS.JOUR, mois = "" } = {}) {
+  const cle = /^\d{4}-\d{2}/.test(texte(mois)) ? texte(mois).slice(0, 7) : moisEnCours();
+
+  if (lePasValide(pas) === PAS.MOIS) {
+    return `les ${COMBIEN_DE_MOIS} mois jusqu'à ${moisEnFrancais(cle)}`;
+  }
+  if (lePasValide(pas) === PAS.ANNEE) {
+    return `les ${COMBIEN_DANNEES} années jusqu'à ${cle.slice(0, 4)}`;
+  }
+  return moisEnFrancais(cle);
+}
+
+/**
+ * La consommation pas par pas, sur une fenêtre continue.
+ *
+ * **Tous les pas de la fenêtre, y compris les vides.** Une courbe qui saute les
+ * pas sans appel rapproche visuellement deux dates éloignées : on lit une
+ * activité continue là où il y a eu une semaine de silence.
+ *
+ * @param {object[]} appels
+ * @param {object} options
+ * @param {string} [options.pas] `jour`, `mois` ou `annee`
+ * @param {string} options.du premier jour de la fenêtre, en ISO court
+ * @param {string} options.au dernier jour, inclus
+ */
+export function parPas(appels = [], { pas = PAS.JOUR, du = "", au = "" } = {}) {
+  const le = LE_PAS[lePasValide(pas)];
+  const debut = texte(du).slice(0, 10);
+  const fin = texte(au).slice(0, 10);
+  if (!debut || !fin || debut > fin) return [];
+
+  const parCle = new Map();
+  for (const appel of Array.isArray(appels) ? appels : []) {
+    const jour = jourDeLAppel(appel);
+    if (!jour || jour < debut || jour > fin) continue;
+    const cle = le.cleDe(jour);
+    if (!parCle.has(cle)) parCle.set(cle, []);
+    parCle.get(cle).push(appel);
+  }
+
+  // Les clés sont ISO à largeur fixe : leur ordre alphabétique **est** leur
+  // ordre chronologique, et la fin du parcours se compare donc directement.
+  const derniere = le.cleDe(fin);
+  const points = [];
+  for (let cle = le.cleDe(debut); cle && cle <= derniere; cle = le.suivante(cle)) {
+    points.push({
+      cle,
+      dit: le.dit(cle),
+      enClair: le.enClair(cle),
+      ...totalDesAppels(parCle.get(cle) ?? [])
+    });
+  }
+
+  return points;
+}
+
+/* ── L'évolution des postes ────────────────────────────────── */
+
+/**
+ * Combien de courbes au plus, dans une évolution.
+ *
+ * **Quatre, et c'est la feuille de style qui le dit** : elle déclare quatre
+ * couleurs de série. Une cinquième prendrait la couleur du texte et se lirait
+ * comme un défaut d'affichage.
+ *
+ * C'est aussi le bon nombre : douze courbes sur un même axe ne se distinguent
+ * pas, et une évolution qu'on ne peut pas lire ne vaut pas mieux que pas
+ * d'évolution du tout.
+ */
+export const COMBIEN_DE_COURBES = 4;
+
+/**
+ * L'évolution des plus gros postes, pas par pas.
+ *
+ * ## La question à laquelle la jauge ne répond pas
+ *
+ * « La lecture de PDF fait 60 % de la facture » dit où part l'argent, jamais si
+ * cela monte. Or ce sont deux décisions différentes : un poste qui pèse et qui
+ * baisse se laisse tranquille ; un poste qui pèse peu et qui triple tous les
+ * mois est le prochain problème.
+ *
+ * ## Le classement porte sur la fenêtre entière, pas sur un pas
+ *
+ * Retenir les quatre plus gros **du dernier pas** ferait entrer et sortir des
+ * courbes d'un mois à l'autre, et l'on comparerait des évolutions qui ne portent
+ * pas sur les mêmes postes.
+ *
+ * @param {object[]} appels
+ * @param {object} quoi
+ * @param {string} [quoi.pas]
+ * @param {string} quoi.du
+ * @param {string} quoi.au
+ * @param {(appel: object) => string} quoi.cleDuPoste ce qui groupe — la nature, le projet
+ * @param {(cle: string) => string} [quoi.nomDuPoste] comment le poste s'écrit
+ * @param {number} [quoi.combien] au plus tant de courbes
+ */
+export function lEvolutionDesPostes(appels = [], {
+  pas = PAS.JOUR, du = "", au = "", cleDuPoste = null, nomDuPoste = null,
+  combien = COMBIEN_DE_COURBES
+} = {}) {
+  if (typeof cleDuPoste !== "function") return [];
+
+  const parPoste = new Map();
+  for (const appel of Array.isArray(appels) ? appels : []) {
+    const cle = texte(cleDuPoste(appel));
+    if (!parPoste.has(cle)) parPoste.set(cle, []);
+    parPoste.get(cle).push(appel);
+  }
+
+  const combienDe = Math.max(1, Math.trunc(nombre(combien)) || COMBIEN_DE_COURBES);
+
+  return [...parPoste.entries()]
+    .map(([cle, liste]) => ({ cle, liste, total: totalDesAppels(liste) }))
+    .sort((gauche, droite) => (droite.total.euros - gauche.total.euros)
+      || (droite.total.jetons - gauche.total.jetons))
+    .slice(0, combienDe)
+    .map(({ cle, liste, total }) => ({
+      cle,
+      nom: (typeof nomDuPoste === "function" ? texte(nomDuPoste(cle)) : "") || cle || "Hors poste",
+      euros: total.euros,
+      points: parPas(liste, { pas, du, au })
+    }));
 }

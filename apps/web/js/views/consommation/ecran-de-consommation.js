@@ -30,8 +30,10 @@ import { escapeHtml } from "../../utils/escape-html.js";
 import { renderSpinnerHtml } from "../ui/spinner.js";
 import { getNiceChartTicks, renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import {
-  CHANGE, TARIFS, enEuros, enJetons, parJour, parNature, parProjet, tarifDuModele, totalDesAppels
+  CHANGE, COMBIEN_DE_COURBES, PAS, TARIFS, enEuros, enJetons, lEvolutionDesPostes,
+  leTitreDuPas, nomDeLaNature, parNature, parPas, parProjet, tarifDuModele, totalDesAppels
 } from "../../services/consommation-ia.js";
+import { renderLeChoixDuPas } from "../ui/le-choix-de-la-periode.js";
 import { phraseDesRefus, refusParMotif } from "../../services/journal-des-refus.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -100,25 +102,49 @@ function renderReserves(total) {
 }
 
 /**
- * La courbe des jours du mois.
+ * La courbe de la période, au pas qu'on a choisi.
  *
  * **En euros, et non en jetons.** C'est la question qu'on se pose devant cet
  * écran ; la courbe des jetons y répondrait de travers, puisqu'un jeton de
  * sortie coûte quatre fois un jeton d'entrée.
+ *
+ * ## Le pas se choisit à côté de la courbe
+ *
+ * Le bouton gris est dans l'en-tête de ce bloc, et non dans la ligne du titre de
+ * l'écran : c'est la courbe qu'il change, pas l'écran entier. Posé en haut, il se
+ * lirait comme un second choix de période, et l'on ne saurait plus lequel agit
+ * sur quoi.
+ *
+ * @param {object[]} points ce que `parPas` a rendu
+ * @param {object} [quoi]
+ * @param {string} [quoi.titre]
+ * @param {string} [quoi.pas] pour que le bouton dise lequel est posé
+ * @param {boolean} [quoi.avecLeChoix] dessiner le bouton du pas
  */
-export function renderCourbeDesJours(jours = [], { titre = "" } = {}) {
-  const liste = Array.isArray(jours) ? jours : [];
-  if (liste.length === 0) return renderRienADire("Aucun appel sur cette période.");
+export function renderLaCourbe(points = [], {
+  titre = "", pas = "", avecLeChoix = false
+} = {}) {
+  const liste = Array.isArray(points) ? points : [];
+  const tete = `
+    <header class="conso-courbe__tete">
+      ${titre ? `<h3 class="conso-courbe__titre">${escapeHtml(titre)}</h3>` : ""}
+      ${avecLeChoix ? renderLeChoixDuPas({ pas }) : ""}
+    </header>`;
 
-  const valeurs = liste.map((jour) => Number(jour?.euros) || 0);
+  if (liste.length === 0) {
+    return `<section class="conso-courbe">${tete}${
+      renderRienADire("Aucun appel sur cette période.")}</section>`;
+  }
+
+  const valeurs = liste.map((un) => Number(un?.euros) || 0);
   const maximum = Math.max(...valeurs, 0);
-  // Un mois sans le moindre appel donnerait un axe de 0 à 0 : la courbe se
+  // Une période sans le moindre appel donnerait un axe de 0 à 0 : la courbe se
   // plaquerait sur le bord et l'on ne saurait pas si elle est vide ou cassée.
   const yTicks = getNiceChartTicks(maximum > 0 ? maximum : 0.01, 4);
 
   return `
     <section class="conso-courbe">
-      ${titre ? `<h3 class="conso-courbe__titre">${escapeHtml(titre)}</h3>` : ""}
+      ${tete}
       ${renderSvgLineChart({
         width: 1012,
         height: 340,
@@ -127,15 +153,71 @@ export function renderCourbeDesJours(jours = [], { titre = "" } = {}) {
         yDomain: [0, yTicks[yTicks.length - 1] || 1],
         xTicks: liste.map((_, rang) => rang),
         yTicks,
-        // Le jour du mois seul : la date entière, répétée trente fois, ne tient
-        // pas sous un axe et ne dit rien de plus.
-        xTickFormatter: (tick) => texte(liste[Number(tick)]?.jour).slice(8),
+        // Ce que le pas sait écrire de lui-même : le jour du mois, le mois en
+        // trois lettres, l'année. La date entière, répétée trente fois, ne
+        // tient pas sous un axe et ne dit rien de plus.
+        xTickFormatter: (tick) => texte(liste[Number(tick)]?.dit),
         yTickFormatter: (valeur) => enEuros(valeur),
         series: [{
-          label: "Estimation par jour",
+          label: "Estimation par pas",
           points: valeurs.map((valeur, rang) => ({ x: rang, y: valeur })),
           fill: true
         }]
+      })}
+    </section>
+  `;
+}
+
+/**
+ * L'évolution de quelques postes sur la période — **l'affichage secondaire**.
+ *
+ * ## Ce que la jauge ne dit pas
+ *
+ * « La lecture de PDF fait 60 % de la facture » dit où part l'argent, jamais si
+ * cela monte. Ce sont deux décisions différentes : un poste qui pèse et qui
+ * baisse se laisse tranquille ; un poste qui pèse peu et qui triple tous les mois
+ * est le prochain problème.
+ *
+ * ## Quatre courbes au plus, et on le dit
+ *
+ * La feuille de style déclare quatre couleurs de série ; une cinquième prendrait
+ * celle du texte et se lirait comme un défaut d'affichage. C'est aussi le bon
+ * nombre : douze courbes sur un même axe ne se distinguent pas, et une évolution
+ * qu'on ne peut pas lire ne vaut pas mieux que pas d'évolution (règle 12).
+ *
+ * **Rien quand il n'y a qu'un pas.** Un point unique dessine une courbe qui ne
+ * monte ni ne descend — la réponse la plus trompeuse possible (règle 5).
+ */
+export function renderLevolutionDesPostes(postes = [], { titre = "Leur évolution" } = {}) {
+  const liste = (Array.isArray(postes) ? postes : []).filter((un) => un?.points?.length > 1);
+  if (liste.length === 0) return "";
+
+  const maximum = Math.max(...liste.flatMap((un) => un.points.map((pas) => Number(pas?.euros) || 0)), 0);
+  const yTicks = getNiceChartTicks(maximum > 0 ? maximum : 0.01, 4);
+  const pas = liste[0].points;
+
+  return `
+    <section class="conso-evolution">
+      <h4 class="conso-evolution__titre">${escapeHtml(titre)}</h4>
+      <p class="conso-evolution__mot mono-small">${escapeHtml(
+        liste.length >= COMBIEN_DE_COURBES
+          ? `Les ${COMBIEN_DE_COURBES} plus coûteux de la période. Ce qui monte coûtera plus cher au prochain pas.`
+          : "Ce qui monte coûtera plus cher au prochain pas."
+      )}</p>
+      ${renderSvgLineChart({
+        width: 1012,
+        height: 260,
+        interactive: true,
+        xDomain: [0, Math.max(1, pas.length - 1)],
+        yDomain: [0, yTicks[yTicks.length - 1] || 1],
+        xTicks: pas.map((_, rang) => rang),
+        yTicks,
+        xTickFormatter: (tick) => texte(pas[Number(tick)]?.dit),
+        yTickFormatter: (valeur) => enEuros(valeur),
+        series: liste.map((un) => ({
+          label: un.nom,
+          points: un.points.map((etape, rang) => ({ x: rang, y: Number(etape?.euros) || 0 }))
+        }))
       })}
     </section>
   `;
@@ -148,7 +230,9 @@ export function renderCourbeDesJours(jours = [], { titre = "" } = {}) {
  * mal des angles**. On veut aussi lire les nombres, ce qu'un camembert oblige à
  * poser en légende.
  */
-export function renderRepartitionParProjet(lignes = [], { titre = "Par projet" } = {}) {
+export function renderRepartitionParProjet(lignes = [], {
+  titre = "Par projet", evolution = []
+} = {}) {
   const liste = Array.isArray(lignes) ? lignes : [];
   if (liste.length === 0) return renderRienADire("Aucun projet n'a encore consommé.");
 
@@ -172,6 +256,7 @@ export function renderRepartitionParProjet(lignes = [], { titre = "Par projet" }
           `;
         }).join("")}
       </ul>
+      ${renderLevolutionDesPostes(evolution, { titre: "L'évolution des chantiers" })}
     </section>
   `;
 }
@@ -191,7 +276,9 @@ export function renderRepartitionParProjet(lignes = [], { titre = "Par projet" }
  * Chaque ligne dit ce que l'appel **faisait**, pas quelle fonction s'exécutait :
  * le nom technique n'apprend rien sur le geste qu'on pourrait faire autrement.
  */
-export function renderRepartitionParNature(lignes = [], { titre = "Par usage" } = {}) {
+export function renderRepartitionParNature(lignes = [], {
+  titre = "Par usage", evolution = []
+} = {}) {
   const liste = Array.isArray(lignes) ? lignes : [];
   if (liste.length === 0) return "";
 
@@ -229,6 +316,7 @@ export function renderRepartitionParNature(lignes = [], { titre = "Par usage" } 
           `;
         }).join("")}
       </ul>
+      ${renderLevolutionDesPostes(evolution, { titre: "L'évolution des usages" })}
     </section>
   `;
 }
@@ -370,34 +458,63 @@ function renderRienADire(mot) {
 /**
  * L'écran entier, tel que les deux endroits l'assemblent.
  *
+ * **Le pas traverse tout.** La courbe, l'évolution des usages et celle des
+ * chantiers se lisent au même pas : trois granularités sur un même écran se
+ * compareraient de travers, et c'est le genre de faux rapprochement qu'on ne
+ * voit pas en regardant.
+ *
  * @param {object} options
  * @param {object[]|null} options.appels `null` quand la lecture a échoué
  * @param {object[]|null} [options.refus] le journal des pannes de la période,
  *   `null` quand on n'a pas pu le lire — ce qui n'est pas « aucune panne »
- * @param {string} options.mois `AAAA-MM`
- * @param {{du: string, au: string}} options.bornes
+ * @param {{du: string, au: string}} options.bornes la fenêtre lue
+ * @param {string} [options.pas] `jour`, `mois` ou `annee`
  * @param {boolean} [options.parProjets] montrer la répartition par projet
+ * @param {boolean} [options.parUsages] montrer la répartition par usage
  * @param {(id: string) => string} [options.nomDuProjet]
- * @param {object} [options.enTete] une carte de plus, posée avant le total
+ * @param {string} [options.enTeteHtml] une carte de plus, posée avant le total
  */
 export function renderConsommation({
-  appels = null, bornes = { du: "", au: "" }, parProjets = false, nomDuProjet = null,
-  titreDuTotal = "Ce mois-ci", detailDuTotal = "", enTeteHtml = "", refus = null
+  appels = null, bornes = { du: "", au: "" }, pas = PAS.JOUR, parProjets = false,
+  parUsages = true, nomDuProjet = null, titreDuTotal = "Ce mois-ci", detailDuTotal = "",
+  enTeteHtml = "", refus = null
 } = {}) {
   if (appels === null) return renderLectureImpossible();
 
+  const fenetre = { pas, ...bornes };
   const total = totalDesAppels(appels);
-  const jours = parJour(appels, bornes);
+  const points = parPas(appels, fenetre);
   const modeles = [...new Set(appels.map((appel) => texte(appel?.model)).filter(Boolean))];
 
   return `
     <div class="conso-ecran">
       ${enTeteHtml}
       ${renderCarteDeConsommation({ total, titre: titreDuTotal, detail: detailDuTotal })}
-      ${renderRepartitionParNature(parNature(appels))}
+      ${/*
+        **La répartition par usage n'est pas toujours possible.** La console lit
+        la consommation d'un compte groupée par pas et par modèle : la nature de
+        l'appel n'en fait pas partie, et la dessiner quand même donnait une seule
+        barre, « inconnu — 100 % ». Une répartition sur une seule case inconnue
+        n'apprend rien et se lit comme une panne (règle 12).
+      */""}
+      ${parUsages ? renderRepartitionParNature(parNature(appels), {
+        evolution: lEvolutionDesPostes(appels, {
+          ...fenetre,
+          cleDuPoste: (appel) => texte(appel?.nature),
+          nomDuPoste: nomDeLaNature
+        })
+      }) : ""}
       ${renderCeQuiNAPasAbouti(refus)}
-      ${renderCourbeDesJours(jours, { titre: "Consommation par jour" })}
-      ${parProjets ? renderRepartitionParProjet(parProjet(appels, nomDuProjet)) : ""}
+      ${renderLaCourbe(points, { titre: leTitreDuPas(pas), pas, avecLeChoix: true })}
+      ${parProjets ? renderRepartitionParProjet(parProjet(appels, nomDuProjet), {
+        evolution: lEvolutionDesPostes(appels, {
+          ...fenetre,
+          cleDuPoste: (appel) => texte(appel?.projetId),
+          nomDuPoste: (cle) => (cle
+            ? (typeof nomDuProjet === "function" ? texte(nomDuProjet(cle)) : "") || cle
+            : "Hors projet")
+        })
+      }) : ""}
       ${renderTarifApplique(modeles)}
     </div>
   `;

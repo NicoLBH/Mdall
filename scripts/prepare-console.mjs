@@ -98,6 +98,29 @@ export const RACINES = [
   // copies. C'est le dénominateur de tout ce que la console annonce : mille
   // affirmations lues, quatre-vingt-quatorze textes distincts.
   "js/services/la-repetition-du-corpus.js",
+  // ── L'onglet Utilisateurs ───────────────────────────────────────────────
+  //
+  // Les comptes de Mdall : un nom, une adresse, des noms de chantier, des
+  // nombres et des dates. **Le premier écran de la console qui nomme des
+  // personnes** — et le premier qui se journalise, parce que la base journalise
+  // chacune de ses trois lectures avant de répondre.
+  //
+  // Il n'emporte aucun contenu : la fonction de base ne rend ni conversation du
+  // copilote, ni message de sujet, ni affirmation, ni texte de document. Une
+  // épreuve lit ces modules et refuse ces noms.
+  "js/services/les-comptes-de-mdall-supabase.js",
+  "js/services/les-comptes-de-mdall.js",
+  // Ce que l'IA a coûté à un compte, mis en euros par **le même** module que
+  // l'écran de l'utilisateur. Un second barème pour la console aurait divergé de
+  // la facture au premier tarif relevé (règle 4) — et c'est précisément le
+  // chiffre qu'on vient vérifier ici.
+  "js/views/consommation/ecran-de-consommation.js",
+  "js/views/ui/le-choix-de-la-periode.js",
+  // Le tableau de partout, sa pagination et sa barre d'outils : rien n'est
+  // dessiné pour la console.
+  "js/views/ui/data-table-shell.js",
+  "js/views/ui/pagination.js",
+  "js/views/ui/spinner.js",
   // La porte par laquelle les idées sortent de la console : des comptes et des
   // termes, jamais une phrase de chantier. Elle est fermée par défaut.
   "js/services/lexport-des-idees.js",

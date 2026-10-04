@@ -1,13 +1,30 @@
 /**
  * Les onglets de la console d'administration.
  *
- * ## Pourquoi un seul, et pourquoi quand même une barre
+ * ## Deux onglets, et ce que la barre dit avant qu'on clique
  *
- * La console n'a qu'un écran : **le carburant**. Une barre d'onglets pour un
- * onglet paraît de trop, et c'est pourtant le bon moment pour la poser : elle
- * dit, avant qu'on ait cliqué nulle part, que cet écran est *un* écran parmi
- * d'autres à venir. Sans elle, la page se lit comme un tableau de bord complet,
- * et l'on croit voir tout ce que la console sait.
+ * La console n'en a eu qu'un pendant plusieurs tours — le carburant —, et la
+ * barre était quand même posée : elle disait, avant qu'on ait cliqué nulle part,
+ * que cet écran est *un* écran parmi d'autres à venir. Sans elle, la page se lit
+ * comme un tableau de bord complet, et l'on croit voir tout ce que la console
+ * sait.
+ *
+ * **Les utilisateurs passent en premier**, et c'est un ordre, pas un rangement :
+ * la première question d'exploitation est « qui est là », et tout le reste —
+ * combien de matière, ce qui se reconnaît, ce qui se prédit — porte sur ce que
+ * ces gens ont versé. Un onglet de comptes placé après les comptes du carburant
+ * se lirait comme une annexe.
+ *
+ * ## Les onglets ne connaissent pas leurs rubriques
+ *
+ * C'est l'inverse : **chaque rubrique déclare son onglet**
+ * (`les-rubriques-de-la-console.js`). Écrire la liste des rubriques ici *et*
+ * là-bas en aurait fait deux, et celle qu'on ne relit jamais aurait fini par
+ * ignorer une rubrique neuve — un onglet qui ne mène nulle part (règle 10).
+ *
+ * C'est aussi ce qui tient **une seule adresse pour un seul écran** : le fragment
+ * nomme la rubrique, l'onglet s'en déduit. Un signet sur une rubrique ouvre donc
+ * son onglet, et il n'y a pas d'état à accorder entre la barre et le rail.
  *
  * C'est la **même barre que côté utilisateur** — `project-tabs` —, avec les
  * mêmes classes. La console n'a aucune classe à elle : un écran d'administration
@@ -18,8 +35,17 @@
  * Une clé entre, un onglet sort.
  */
 
+/** Les onglets, nommés une fois, pour que personne n'écrive la clé à la main. */
+export const ONGLET = {
+  /** Qui est là : les comptes, et ce que chacun a fait. */
+  UTILISATEURS: "utilisateurs",
+  /** Ce que Mdall a reçu, et ce que cela permet. */
+  CARBURANT: "carburant"
+};
+
 export const ONGLETS_DE_LA_CONSOLE = [
-  { cle: "carburant", dit: "Carburant", icone: "fire" }
+  { cle: ONGLET.UTILISATEURS, dit: "Utilisateurs", icone: "people" },
+  { cle: ONGLET.CARBURANT, dit: "Carburant", icone: "fire" }
 ];
 
 export const ONGLET_PAR_DEFAUT = ONGLETS_DE_LA_CONSOLE[0].cle;
@@ -34,4 +60,10 @@ export const ONGLET_PAR_DEFAUT = ONGLETS_DE_LA_CONSOLE[0].cle;
 export function ongletDeLaConsoleValide(cle) {
   const dit = String(cle ?? "").trim();
   return ONGLETS_DE_LA_CONSOLE.some((un) => un.cle === dit) ? dit : ONGLET_PAR_DEFAUT;
+}
+
+/** Un onglet entier — sa clé, son nom, son icône. */
+export function longletDit(cle) {
+  const valide = ongletDeLaConsoleValide(cle);
+  return ONGLETS_DE_LA_CONSOLE.find((un) => un.cle === valide) ?? ONGLETS_DE_LA_CONSOLE[0];
 }

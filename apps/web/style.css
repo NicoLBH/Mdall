@@ -25577,6 +25577,122 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .conso-repartition__titre,
 .conso-tarif__titre{margin:0;font-size:14px;font-weight:600;color:var(--text);}
 
+/* ── Le choix du pas, à côté de ce qu'il commande ────────────────────
+   Le bouton est dans l'en-tête de la courbe, et non dans la ligne du titre de
+   l'écran : c'est la courbe qu'il change. Posé en haut, il se lirait comme un
+   second choix de période. */
+.conso-courbe__tete{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+/* ── L'évolution, l'affichage secondaire ──────────────────────────
+   Elle vit **dans** le bloc qu'elle commente — sous la liste des usages, sous
+   celle des chantiers —, et non dans un cadre à elle : ce sont les mêmes
+   postes, et un second cadre les ferait lire comme un autre sujet. */
+.conso-evolution{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:4px;
+  padding-top:16px;
+  border-top:1px solid var(--border);
+  overflow-x:auto;
+}
+.conso-evolution__titre{margin:0;font-size:13px;font-weight:600;color:var(--text);}
+.conso-evolution__mot{margin:0;color:var(--muted);}
+
+/* ── Console › Utilisateurs › Les comptes ────────────────────────
+   Le tableau, la pagination et la barre d'outils viennent de l'application :
+   il n'y a ici que les marges et la grille des faits. Un écran
+   d'administration recalibré à la main se verrait comme une greffe. */
+.comptes-de-mdall{display:flex;flex-direction:column;gap:16px;}
+
+.comptes-de-mdall__tete{display:flex;flex-direction:column;gap:6px;}
+/* La flèche de retour à gauche et **sur la même ligne** que le titre : une
+   sortie sur une ligne à elle fait deux gestes pour un. */
+.comptes-de-mdall__tete--detail{flex-direction:row;align-items:center;gap:10px;}
+.comptes-de-mdall__retour{flex:0 0 auto;}
+
+.comptes-de-mdall__titre{margin:0;font-size:20px;font-weight:600;color:var(--text);}
+.comptes-de-mdall__sous-titre{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+.comptes-de-mdall__mot{margin:0;color:var(--muted);}
+
+/* Chaque consultation de cet écran laisse une ligne au journal des accès. Le
+   dire n'est pas une précaution de forme : c'est ce qui rappelle que regarder
+   un compte est un geste, pas une consultation anodine. */
+.comptes-de-mdall__trace{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:4px 0 0;
+  color:var(--fgColor-attention, #d29922);
+}
+.comptes-de-mdall__trace .octicon{flex:0 0 auto;}
+
+.comptes-de-mdall__identite,
+.comptes-de-mdall__chantiers,
+.comptes-de-mdall__conso{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+}
+
+.comptes-de-mdall__conso-tete{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+/* Les faits du compte : deux colonnes qui se replient en une. Un tableau
+   aurait demandé un en-tête pour deux mots par ligne. */
+.comptes-de-mdall__faits{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+  gap:10px 24px;
+  margin:0;
+}
+.comptes-de-mdall__fait{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.comptes-de-mdall__fait dt{font-size:12px;color:var(--muted);}
+.comptes-de-mdall__fait dd{margin:0;color:var(--text);overflow-wrap:anywhere;}
+
+.comptes-de-mdall__liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+.comptes-de-mdall__chantier{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:8px 0;
+  border-bottom:1px solid var(--border);
+}
+.comptes-de-mdall__chantier:last-child{border-bottom:0;}
+.comptes-de-mdall__chantier-nom{font-weight:600;color:var(--text);}
+.comptes-de-mdall__chantier-dit{color:var(--muted);}
+/* Un chantier rangé n'est pas un chantier mort : il pâlit, il ne disparaît pas. */
+.comptes-de-mdall__chantier.est-archive .comptes-de-mdall__chantier-nom{color:var(--muted);}
+
+/* La ligne de titre d'un panneau de réglages qui porte une action à droite.
+   Le bouton de période commande l'écran entier — le total, les usages, la
+   courbe, les chantiers — : posé plus bas, il ferait croire qu'il ne règle que
+   le bloc qui le suit. */
+.settings-panel__head--avec-action{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+}
+
 .conso-repartition,
 .conso-tarif{
   display:flex;

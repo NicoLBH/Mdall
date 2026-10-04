@@ -33,17 +33,44 @@
  * fait. On ne peut pas relever ce qu'une chose entraîne avant de savoir la
  * nommer.
  *
+ * ## Chaque rubrique déclare son onglet
+ *
+ * Et non l'inverse. La barre d'onglets aurait pu porter la liste de ses
+ * rubriques ; elles auraient alors été écrites deux fois, et celle qu'on ne
+ * relit jamais aurait fini par ignorer une rubrique neuve — un rail amputé
+ * d'une entrée, ou un onglet qui ne mène nulle part (règle 10).
+ *
+ * C'est aussi ce qui tient **une seule adresse pour un seul écran** : le
+ * fragment nomme la rubrique, et l'onglet s'en déduit. Il n'y a donc rien à
+ * accorder entre la barre du haut et le rail de gauche, et un signet sur une
+ * rubrique ouvre son onglet.
+ *
  * ## Il est pur
  *
  * Des noms et des phrases. L'écran les dessine, les services les remplissent.
  */
 
-/** La rubrique par défaut : ce dont tout le reste dépend. */
+import { ONGLET, ONGLET_PAR_DEFAUT, ongletDeLaConsoleValide } from "./les-onglets-de-la-console.js";
+
+/** La rubrique du carburant : ce dont tout le reste dépend. */
 export const LE_CARBURANT = "carburant";
+
+/** Celle des comptes : la première question d'exploitation — qui est là. */
+export const LES_COMPTES = "comptes";
 
 export const LES_RUBRIQUES = [
   {
+    cle: LES_COMPTES,
+    onglet: ONGLET.UTILISATEURS,
+    libelle: "Les comptes",
+    icone: "person",
+    question: "Qui est là, et qu'est-ce que chacun a fait ?",
+    explication: "Un nom, une adresse, ses chantiers, ses sujets comptés et ce "
+      + "que l'IA lui a coûté. Jamais ce qu'il a écrit."
+  },
+  {
     cle: LE_CARBURANT,
+    onglet: ONGLET.CARBURANT,
     libelle: "Le carburant",
     icone: "mail",
     question: "Qu'est-ce que Mdall a reçu, et qu'est-ce que cela permet ?",
@@ -52,6 +79,7 @@ export const LES_RUBRIQUES = [
   },
   {
     cle: "reconnaissance",
+    onglet: ONGLET.CARBURANT,
     libelle: "Ce qui est reconnu",
     icone: "labels-distribution",
     question: "Sur ce qu'on a reçu, qu'est-ce que le système sait nommer ?",
@@ -60,6 +88,7 @@ export const LES_RUBRIQUES = [
   },
   {
     cle: "prediction",
+    onglet: ONGLET.CARBURANT,
     libelle: "Ce qui s'enchaîne",
     icone: "graph",
     question: "Qu'est-ce qui suit quoi, et mieux que par hasard ?",
@@ -68,6 +97,7 @@ export const LES_RUBRIQUES = [
   },
   {
     cle: "sujets",
+    onglet: ONGLET.CARBURANT,
     libelle: "Les sujets employés",
     icone: "tag",
     question: "De quoi les chantiers parlent-ils, dans leurs mots ?",
@@ -76,6 +106,7 @@ export const LES_RUBRIQUES = [
   },
   {
     cle: "idees",
+    onglet: ONGLET.CARBURANT,
     libelle: "Les idées énoncées",
     icone: "north-star",
     question: "Qu'est-ce qui entraîne quoi, et qu'est-ce qui s'enchaîne ?",
@@ -85,6 +116,7 @@ export const LES_RUBRIQUES = [
   },
   {
     cle: "manques",
+    onglet: ONGLET.CARBURANT,
     libelle: "Ce qui n'est pas fait",
     icone: "alert",
     question: "Qu'est-ce qui n'existe pas, et qu'on pourrait croire en cours ?",
@@ -93,10 +125,53 @@ export const LES_RUBRIQUES = [
   }
 ];
 
+/**
+ * La rubrique par défaut : la première du premier onglet.
+ *
+ * **Déduite, et non écrite.** Écrite, elle aurait pu désigner une rubrique d'un
+ * autre onglet que celui qui est en tête — la console se serait ouverte sur un
+ * onglet en montrant le contenu d'un autre.
+ */
+export const LA_RUBRIQUE_PAR_DEFAUT = LES_RUBRIQUES
+  .find((une) => une.onglet === ONGLET_PAR_DEFAUT).cle;
+
 /** La rubrique demandée, ramenée à l'une de celles qui existent. */
 export function laRubriqueValide(cle) {
   const demande = String(cle ?? "").trim();
-  return LES_RUBRIQUES.some((une) => une.cle === demande) ? demande : LE_CARBURANT;
+  return LES_RUBRIQUES.some((une) => une.cle === demande) ? demande : LA_RUBRIQUE_PAR_DEFAUT;
+}
+
+/**
+ * L'onglet dont une rubrique relève.
+ *
+ * C'est ce qui permet à la barre du haut de se souligner au bon endroit sans
+ * qu'on lui dise : l'adresse nomme la rubrique, elle en déduit l'onglet.
+ */
+export function ongletDeLaRubrique(cle) {
+  return ongletDeLaConsoleValide(laRubriqueDite(cle).onglet);
+}
+
+/**
+ * Les rubriques d'un onglet, dans l'ordre où elles sont déclarées.
+ *
+ * Le rail de gauche n'en montre que celles-là : les six du carburant sous
+ * « Carburant », celle des comptes sous « Utilisateurs ». Un rail qui montrerait
+ * les sept partout ferait de la barre d'onglets une décoration.
+ */
+export function lesRubriquesDeLonglet(cle) {
+  const voulu = ongletDeLaConsoleValide(cle);
+  return LES_RUBRIQUES.filter((une) => une.onglet === voulu);
+}
+
+/**
+ * Où mène un onglet : sa première rubrique.
+ *
+ * Un onglet n'est pas une adresse — il n'a pas d'écran à lui. Lui donner le
+ * fragment `#utilisateurs` ouvrirait une rubrique inconnue, donc la rubrique par
+ * défaut : cliquer sur « Carburant » ramènerait aux comptes.
+ */
+export function laPremiereRubriqueDe(cle) {
+  return (lesRubriquesDeLonglet(cle)[0] ?? LES_RUBRIQUES[0]).cle;
 }
 
 /** Une rubrique entière — son nom, sa question, ce qu'elle explique. */

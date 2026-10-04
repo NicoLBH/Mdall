@@ -121,6 +121,10 @@ const LES_MIGRATIONS = [
   // La lecture d'un rapport de contrôle se garde : privée, comme celles des CR
   // et des fils, et pour une raison de plus — elle porte le verdict d'un tiers.
   "202611210001_une_lecture_de_rapport_se_garde.sql",
+  // Les comptes de Mdall, et le journal des accès administrateurs. Trois
+  // fonctions `security definer` qui lisent des **personnes** : c'est le cas où
+  // il faut essayer d'entrer, pas relire la règle.
+  "202611220001_les_comptes_de_mdall.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -3017,4 +3021,333 @@ test("une lecture de fil porte ce qu'elle a vu", { skip: sansPostgres }, () => {
   // **Et pas sous le mot réservé**, celui que PostgreSQL refuse.
   assert.ok(!colonnes.includes("analyse"),
     "la colonne porte le mot réservé : le déploiement sera refusé");
+});
+
+/* ── Les comptes de Mdall, et le journal qui dit qui les a vus ───────────── */
+
+/**
+ * **Trois fonctions `security definer` qui lisent des personnes.**
+ *
+ * Les autres fonctions de la console rendent des agrégats anonymes : même
+ * ouvertes à tort, elles ne nomment personne. Celles-ci rendent un nom, un
+ * prénom, une adresse. Une porte qui ne tiendrait pas ici publierait l'annuaire
+ * des comptes de Mdall à toute session authentifiée — et c'est le genre de trou
+ * qu'on ne voit pas en relisant, seulement en essayant d'entrer.
+ */
+test("les comptes se refusent à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    for (const requete of [
+      "select count(*) from public.les_comptes_de_mdall(1, 25, null);",
+      `select count(*) from public.le_compte_de_mdall('${A}');`,
+      `select count(*) from public.la_consommation_dun_compte('${A}', '2026-10-01', '2026-10-31', 'day');`
+    ]) {
+      const etranger = banc.sousLadresse("quelquun@ailleurs.example", requete);
+      assert.equal(etranger.ok, false, `ouverte à un compte ordinaire : ${requete}`);
+      assert.match(etranger.motif, /réservé à la console/);
+
+      const sansJeton = banc.sousLadresse("", requete);
+      assert.equal(sansJeton.ok, false, `ouverte sans session : ${requete}`);
+    }
+  });
+
+/**
+ * **Une tentative refusée n'est pas un accès.**
+ *
+ * Si la porte journalisait avant de refuser, le journal se remplirait de lignes
+ * qui n'ont rien vu — et celles qui ont vu quelque chose s'y noieraient. C'est
+ * un journal qu'on ne relit plus, donc un journal pour rien.
+ */
+test("un refus ne laisse pas de ligne au journal", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.acces_administrateurs;");
+
+  banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.les_comptes_de_mdall(1, 25, null);");
+
+  const combien = banc.sql("select count(*) from public.acces_administrateurs;");
+  assert.equal(combien.sortie.trim(), "0", "un refus a été journalisé comme un accès");
+});
+
+/**
+ * **Et un accès, lui, en laisse une** — avec qui, quelle page, et quel filtre.
+ *
+ * C'est le § 5.4 de `docs/la-console-de-ladministrateur.md`, et il est
+ * irrattrapable : un journal ajouté six mois plus tard ne dit rien des six
+ * premiers mois, qui sont précisément ceux qu'on voudra expliquer.
+ */
+test("un accès aux comptes se journalise, avec son filtre", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;
+            delete from public.acces_administrateurs;`);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.les_comptes_de_mdall(2, 10, 'ourdine');");
+  assert.equal(lu.ok, true, lu.motif);
+
+  const journal = banc.sql(
+    "select courriel, page, filtre from public.acces_administrateurs order by quand desc limit 1;");
+  assert.match(journal.sortie, /patron@mdall\.example/);
+  assert.match(journal.sortie, /utilisateurs\/comptes/);
+  // Le filtre tel qu'il a été reçu : la page demandée, la taille, la recherche.
+  assert.match(journal.sortie, /page=2/);
+  assert.match(journal.sortie, /par_page=10/);
+  assert.match(journal.sortie, /cherche=ourdine/);
+});
+
+/**
+ * **Le journal ne se lit pas depuis un navigateur**, pas même par un
+ * administrateur.
+ *
+ * Un journal des accès que son sujet peut relire est un journal qu'il peut
+ * vérifier avant d'effacer. Il n'a donc aucune politique de lecture : on le
+ * consulte avec les clés, là où l'on ne peut pas se journaliser soi-même une
+ * exception.
+ */
+test("le journal des accès ne se lit par aucune clé du navigateur",
+  { skip: sansPostgres }, () => {
+    for (const essai of [
+      banc.sousLadresse("patron@mdall.example", "select count(*) from public.acces_administrateurs;"),
+      banc.enTantQue(A, "select count(*) from public.acces_administrateurs;"),
+      banc.sansCompte("select count(*) from public.acces_administrateurs;")
+    ]) {
+      assert.equal(essai.ok === false || essai.sortie.trim() === "0", true,
+        `le journal se lit : ${essai.sortie}`);
+    }
+
+    // Et l'on n'y écrit pas non plus une ligne à la main : une ligne qu'on peut
+    // fabriquer ne prouve rien de celles qu'on n'a pas fabriquées.
+    const faux = banc.sousLadresse("patron@mdall.example",
+      "insert into public.acces_administrateurs (page) values ('inventée');");
+    assert.equal(faux.ok, false, "une ligne de journal a été écrite à la main");
+  });
+
+/**
+ * **Possédé n'est pas collaboré.**
+ *
+ * Un déclencheur inscrit le propriétaire comme collaborateur de son propre
+ * chantier (`ensure_project_owner_collaborator`). Les compter ensemble dirait
+ * que chacun collabore à tout ce qu'il possède — un chiffre qui monte avec le
+ * premier et n'apprend rien de plus.
+ */
+test("un administrateur lit les comptes, et les deux rôles se distinguent",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      update auth.users set email = 'ourdine@entreprise.example' where id = '${A}';
+      update auth.users set email = 'bertrand@novaclim.example' where id = '${B}';
+      insert into public.user_public_profiles (user_id, first_name, last_name, company)
+        values ('${A}', 'Ourdine', 'Ferrand', 'VERIFAS') on conflict do nothing;
+      -- A possède la Médiathèque ; B y collabore, et ne possède rien.
+      insert into public.project_collaborators (project_id, collaborator_user_id, status)
+        values ('${MEDIATHEQUE}', '${B}', 'Actif'),
+               -- Le propriétaire est inscrit chez lui par le déclencheur : il ne
+               -- doit pas en devenir « collaborateur ».
+               ('${MEDIATHEQUE}', '${A}', 'Actif');`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select courriel, prenom, nom, societe, projets_possedes, projets_collabores,"
+      + " combien_en_tout from public.les_comptes_de_mdall(1, 25, null)"
+      + " where courriel is not null order by courriel;");
+    assert.equal(lu.ok, true, lu.motif);
+
+    const champs = (une) => une.split("|").map((un) => un.trim());
+    const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean).map(champs);
+    const bertrand = lignes.find((une) => une[0].startsWith("bertrand@"));
+    const ourdine = lignes.find((une) => une[0].startsWith("ourdine@"));
+
+    assert.ok(ourdine, lu.sortie);
+    assert.deepEqual(ourdine.slice(1, 4), ["Ourdine", "Ferrand", "VERIFAS"]);
+    // **A est inscrit comme collaborateur de son propre chantier** — le
+    // déclencheur le fait —, et il ne doit pas en devenir « collaborateur » pour
+    // autant : sinon le chiffre monterait avec le nombre de chantiers possédés
+    // et n'apprendrait rien de plus que la colonne d'à côté.
+    assert.equal(ourdine[5], "0", `Ourdine collabore chez lui : ${ourdine}`);
+    assert.ok(Number(ourdine[4]) >= 1, `Ourdine ne possède rien : ${ourdine}`);
+
+    assert.ok(bertrand, lu.sortie);
+    // Il collabore à la Médiathèque, qui est à A — et à celui-là seulement.
+    assert.equal(bertrand[5], "1", `${bertrand}`);
+  });
+
+/**
+ * **La recherche cherche, et la page coupe.**
+ *
+ * Le total voyage avec chaque ligne : sans lui, l'écran ne sait pas combien de
+ * pages il reste et n'ose pas proposer la suivante. Et il compte **avant** la
+ * coupe — un total égal à la taille de la page ferait croire qu'on voit tout.
+ */
+test("la liste se cherche et se coupe, et dit combien il y en a en tout",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const cherche = banc.sousLadresse("patron@mdall.example",
+      "select courriel, combien_en_tout from public.les_comptes_de_mdall(1, 25, 'novaclim');");
+    assert.equal(cherche.ok, true, cherche.motif);
+    const trouves = cherche.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    assert.equal(trouves.length, 1, cherche.sortie);
+    assert.match(trouves[0], /bertrand@novaclim\.example\s*\|\s*1/);
+
+    // Une page de un : une ligne rendue, et le total qui dit qu'il y en a plus.
+    const coupee = banc.sousLadresse("patron@mdall.example",
+      "select combien_en_tout from public.les_comptes_de_mdall(1, 1, null);");
+    const total = Number(coupee.sortie.trim());
+    assert.equal(coupee.sortie.trim().split("\n").length, 1, "la page n'a pas été coupée");
+    assert.ok(total >= 2, `le total compte après la coupe : ${total}`);
+
+    // **Une taille délirante est ramenée à cent.** Sans borne, un appelant
+    // demanderait la base entière en une requête — et la rendrait au navigateur.
+    //
+    // On pose donc assez de comptes pour dépasser la borne, et l'on vérifie
+    // **ce qui revient**. Vérifier que l'appel aboutit ne prouvait rien : il
+    // aboutit tout aussi bien sans borne.
+    banc.sql(`insert into auth.users (id, email)
+      select gen_random_uuid(), 'foule' || i || '@chantier.example'
+      from generate_series(1, 140) as i;`);
+
+    const enorme = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_comptes_de_mdall(1, 100000, null);");
+    assert.equal(enorme.ok, true, enorme.motif);
+    assert.equal(Number(enorme.sortie.trim()) <= 100, true,
+      `une page a rendu ${enorme.sortie.trim()} comptes : la borne ne tient pas`);
+
+    // Et une taille absurde dans l'autre sens rend au moins une ligne, plutôt
+    // qu'une page vide qui se lirait « aucun compte ».
+    const minuscule = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_comptes_de_mdall(1, 0, null);");
+    assert.equal(Number(minuscule.sortie.trim()), 1, minuscule.sortie);
+
+    banc.sql("delete from auth.users where email like 'foule%@chantier.example';");
+  });
+
+/**
+ * **Le détail d'un compte nomme ses chantiers et compte ses sujets.**
+ *
+ * Il compte, il ne lit pas : le titre d'un sujet n'entre pas ici. C'est la règle
+ * de la console — la forme et les comptes traversent, le contenu reste.
+ */
+test("le détail d'un compte porte ses projets, ses sujets et sa consommation",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;
+      insert into public.ai_usages (owner_id, model, input_tokens, output_tokens, created_at)
+        values ('${A}', 'claude-sonnet-5-5', 1000, 200, '2026-10-02T10:00:00Z'),
+               ('${A}', 'claude-sonnet-5-5', 3000, 400, '2026-10-02T18:00:00Z'),
+               ('${A}', 'claude-opus-5-5', 500, 100, '2026-09-15T10:00:00Z'),
+               ('${B}', 'claude-sonnet-5-5', 70, 10, '2026-10-02T10:00:00Z');`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      `select courriel, sujets, appels, jetons, jsonb_array_length(projets)`
+      + ` from public.le_compte_de_mdall('${A}');`);
+    assert.equal(lu.ok, true, lu.motif);
+    assert.match(lu.sortie, /ourdine@entreprise\.example/);
+    // Trois appels à lui, pas les quatre de la base.
+    assert.match(lu.sortie, /\|\s*3\s*\|\s*5200\s*\|/, lu.sortie);
+
+    // Les chantiers viennent avec leur rôle, et c'est ce qui les distingue.
+    const roles = banc.sousLadresse("patron@mdall.example",
+      `select distinct un ->> 'role' from public.le_compte_de_mdall('${A}'),`
+      + ` jsonb_array_elements(projets) as un order by 1;`);
+    assert.match(roles.sortie, /proprietaire/);
+
+    // Un compte qui n'existe pas rend zéro ligne, et non une ligne vide : une
+    // ligne de zéros se lirait comme un compte sans activité.
+    const inconnu = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.le_compte_de_mdall('99999999-9999-4999-8999-999999999999');");
+    assert.equal(inconnu.sortie.trim(), "0");
+  });
+
+/**
+ * **La consommation est groupée en base, et l'axe reste au JavaScript.**
+ *
+ * Ce qui est ici est une réduction de volume : `date_trunc` ramène chaque appel
+ * au début de son pas, et l'on somme par pas et par modèle. Le tarif, les pas
+ * vides et les libellés restent dans `services/consommation-ia.js` — un second
+ * barème en SQL divergerait de la facture au premier tarif relevé (règle 4).
+ */
+test("la consommation d'un compte se groupe par pas et par modèle",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const parJour = banc.sousLadresse("patron@mdall.example",
+      `select to_char(le, 'YYYY-MM-DD'), model, entree, sortie, combien`
+      + ` from public.la_consommation_dun_compte('${A}', '2026-09-01', '2026-10-31', 'day')`
+      + ` order by 1, 2;`);
+    assert.equal(parJour.ok, true, parJour.motif);
+    const jours = parJour.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    // Deux appels du même modèle le même jour ne font qu'une ligne, et elle
+    // porte combien ils étaient.
+    assert.ok(jours.some((une) => /2026-10-02\s*\|\s*claude-sonnet-5-5\s*\|\s*4000\s*\|\s*600\s*\|\s*2/.test(une)),
+      parJour.sortie);
+
+    // Par mois, les deux jours d'octobre se réunissent — et les deux modèles
+    // restent distincts, parce que le coût dépend du modèle.
+    const parMois = banc.sousLadresse("patron@mdall.example",
+      `select to_char(le, 'YYYY-MM'), model, entree, combien`
+      + ` from public.la_consommation_dun_compte('${A}', '2026-01-01', '2026-12-31', 'month')`
+      + ` order by 1, 2;`);
+    const mois = parMois.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    assert.ok(mois.some((une) => /2026-09\s*\|\s*claude-opus-5-5\s*\|\s*500\s*\|\s*1/.test(une)), parMois.sortie);
+    assert.ok(mois.some((une) => /2026-10\s*\|\s*claude-sonnet-5-5\s*\|\s*4000\s*\|\s*2/.test(une)), parMois.sortie);
+
+    // **La borne de fin est incluse.** Un appel du dernier jour de la fenêtre
+    // qui disparaîtrait ferait une facture qui s'arrête la veille.
+    const dernier = banc.sousLadresse("patron@mdall.example",
+      `select coalesce(sum(combien), 0) from public.la_consommation_dun_compte(`
+      + `'${A}', '2026-10-02', '2026-10-02', 'day');`);
+    assert.equal(dernier.sortie.trim(), "2", dernier.sortie);
+  });
+
+/**
+ * **Trois pas, et pas un de plus.**
+ *
+ * `date_trunc` accepte bien d'autres mots — `week`, `quarter`, `millennium`.
+ * Laisser passer celui qu'on reçoit reviendrait à laisser l'appelant choisir une
+ * granularité que l'axe du JavaScript ne sait pas dessiner : la courbe
+ * s'afficherait vide, ce qui se lit « rien n'a été consommé » (règle 5).
+ */
+test("un pas que l'écran ne sait pas dessiner est refusé", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  for (const pas of ["week", "quarter", "millennium", "'; drop table projects; --"]) {
+    const essai = banc.sousLadresse("patron@mdall.example",
+      `select count(*) from public.la_consommation_dun_compte('${A}', '2026-10-01', '2026-10-31',`
+      + ` ${pas.includes("'") ? "$$" + pas + "$$" : `'${pas}'`});`);
+    assert.equal(essai.ok, false, `le pas « ${pas} » est passé`);
+    assert.match(essai.motif, /pas inconnu/);
+  }
+
+  // Les trois qui existent passent.
+  for (const pas of ["day", "month", "year"]) {
+    const essai = banc.sousLadresse("patron@mdall.example",
+      `select count(*) from public.la_consommation_dun_compte('${A}', '2026-10-01', '2026-10-31', '${pas}');`);
+    assert.equal(essai.ok, true, `${pas} : ${essai.motif}`);
+  }
+
+  // Et la table des projets est toujours là.
+  assert.equal(banc.sql("select count(*) > 0 from public.projects;").sortie.trim(), "t");
+});
+
+/**
+ * **Un compte effacé ne reparaît pas dans l'annuaire.**
+ *
+ * Le droit à l'effacement n'est pas « on ne le montre plus à l'écran de
+ * l'utilisateur » : c'est aussi, et surtout, « la console ne le liste plus ».
+ */
+test("un compte effacé quitte la liste des comptes", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;
+    update auth.users set deleted_at = now() where id = '${B}';`);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select courriel from public.les_comptes_de_mdall(1, 100, null);");
+  assert.doesNotMatch(lu.sortie, /bertrand@novaclim\.example/,
+    "un compte effacé est encore listé");
+
+  const detail = banc.sousLadresse("patron@mdall.example",
+    `select count(*) from public.le_compte_de_mdall('${B}');`);
+  assert.equal(detail.sortie.trim(), "0", "un compte effacé a encore un détail");
+
+  banc.sql(`update auth.users set deleted_at = null where id = '${B}';`);
 });
