@@ -21,7 +21,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { matiereDuCompteRendu, renderLaLecture, reservesDeLaRestitution } from "./lecture-des-cr.js";
+import {
+  leChantierAChange, matiereDuCompteRendu, renderLaLecture, reservesDeLaRestitution
+} from "./lecture-des-cr.js";
 import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
 import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
 import { blocsAProposer } from "../../ui/mdall-de-la-proposition.js";
@@ -1687,7 +1689,7 @@ test("pendant une lecture, la zone se tait et n'offre rien", () => {
   // Déposer un second document par-dessus celui qu'on lit mêlerait les deux. La
   // zone le dit et retire ses portes — sans disparaître, sinon le glisser-déposer
   // ne serait plus branché au retour.
-  const html = renderLaLecture(unEtat({ phase: "lecture" }));
+  const html = renderLaLecture(unEtat({ phase: "lecture", depotOuvert: true }));
 
   assert.match(html, /en cours de lecture/);
   assert.doesNotMatch(html, /data-zone-fichier/);
@@ -1701,7 +1703,8 @@ test("on peut choisir depuis Fichiers des deux endroits", () => {
   // vivait dans `choisir-depuis-fichiers.test.mjs`, où elle comptait deux
   // occurrences dans le **source** ; le bouton de la zone est passé dans le
   // composant commun, et le compte serait devenu rouge sans que l'écran change.
-  assert.match(renderLaLecture(unEtat({ phase: "vide" })), /data-zone-depuis-fichiers/);
+  assert.match(renderLaLecture(unEtat({ phase: "vide", depotOuvert: true })),
+    /data-zone-depuis-fichiers/);
   assert.match(renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, fichier: { name: "1824_CR_17.pdf" }
   })), /data-zone-depuis-fichiers/);
@@ -1713,7 +1716,7 @@ test("un document ouvert fait disparaître la zone de dépôt", () => {
   }));
   assert.doesNotMatch(avec, /data-zone-de-depot/);
 
-  const sans = renderLaLecture(unEtat({ phase: "vide" }));
+  const sans = renderLaLecture(unEtat({ phase: "vide", depotOuvert: true }));
   assert.match(sans, /data-zone-de-depot/);
 });
 
@@ -2154,7 +2157,7 @@ const unChoix = (surcharge = {}) => ({
  * journal des Actions qui la montre (`la-file-au-journal.js`).
  */
 test("le choix et le dépôt ne se montrent jamais ensemble", () => {
-  const depot = renderLaLecture(unEtat());
+  const depot = renderLaLecture(unEtat({ depotOuvert: true }));
   assert.match(depot, /data-zone-depuis-fichiers/, "le dépôt ne propose pas Fichiers");
   assert.doesNotMatch(depot, /data-choisir-fichier/);
 
@@ -2348,7 +2351,7 @@ test("chaque famille offre sa propre porte, et dit ce qu'elle lit", () => {
   // Une zone qui dit « Déposez un compte rendu » sous « Bureau de Contrôle »
   // contredirait le rail, et déposer un rapport y lancerait une lecture de compte
   // rendu — pire qu'un bouton absent.
-  const bc = renderLaLecture(unEtat({ dejaLus: [], famille: "rapports" }));
+  const bc = renderLaLecture(unEtat({ dejaLus: [], famille: "rapports", depotOuvert: true }));
   assert.doesNotMatch(bc, /Déposez un compte rendu/);
   assert.match(bc, /Choisissez des rapports de bureau de contrôle/);
   assert.match(bc, /data-zone-depuis-fichiers/);
@@ -2359,15 +2362,71 @@ test("chaque famille offre sa propre porte, et dit ce qu'elle lit", () => {
   // main avait sa bordure, son bouton et son aide à une autre place (règle 4).
   assert.match(bc, /class="zone-de-depot"/);
 
-  const mails = renderLaLecture(unEtat({ dejaLus: [], famille: "mails" }));
+  const mails = renderLaLecture(unEtat({ dejaLus: [], famille: "mails", depotOuvert: true }));
   assert.match(mails, /Déposez des mails, ou choisissez-les/);
   assert.match(mails, /data-zone-fichier/);
 
   // Et sous les comptes rendus, le dépôt depuis le disque est bien là.
-  const crs = renderLaLecture(unEtat({ dejaLus: [], famille: "comptes_rendus" }));
+  const crs = renderLaLecture(unEtat({
+    dejaLus: [], famille: "comptes_rendus", depotOuvert: true
+  }));
   assert.match(crs, /Déposez un compte rendu/);
-  const toutes = renderLaLecture(unEtat({ dejaLus: [] }));
+  const toutes = renderLaLecture(unEtat({ dejaLus: [], depotOuvert: true }));
   assert.match(toutes, /Déposez un compte rendu/);
+});
+
+/* ── La zone de dépôt est un geste secondaire ────────────────────────────── */
+
+/**
+ * Elle occupait un tiers de l'écran en permanence, au-dessus du tableau. Or
+ * déposer se fait une fois par lot ; consulter ce qui a été analysé, dix fois
+ * par jour. Le rectangle en pointillés annonçait donc l'action secondaire comme
+ * si c'était la principale.
+ */
+test("la zone de dépôt est fermée tant qu'on ne l'a pas demandée", () => {
+  const html = renderLaLecture(unEtat({ dejaLus: [] }));
+
+  assert.doesNotMatch(html, /data-zone-de-depot/);
+  assert.doesNotMatch(html, /Déposez un compte rendu/);
+});
+
+test("un bouton vert ouvre la zone, et il est à gauche de Transformer", () => {
+  // Les deux gestes de l'écran se tiennent côte à côte : faire entrer des
+  // documents, et faire sortir ce qu'on en a tiré.
+  const html = renderLaLecture(unEtat({ dejaLus: [] }));
+
+  assert.match(html, /data-lecture-cr-ouvrir-depot/);
+  assert.match(html, /gh-btn--success/, "le bouton qui ajoute n'est pas vert");
+  assert.ok(html.indexOf("data-lecture-cr-ouvrir-depot") < html.indexOf("lectureCrTransformer"),
+    "« + Documents » se dessine après Transformer");
+});
+
+test("le bouton d'ouverture dit si la zone est ouverte", () => {
+  // Un bouton qui ne dit pas l'état de ce qu'il commande laisse chercher si le
+  // clic a porté.
+  //
+  // **L'attribut se lit sur le bouton**, et non n'importe où dans la page : le
+  // rail en porte un aussi, et chercher `aria-expanded="true"` au large le
+  // trouverait toujours — y compris si ce bouton-ci cessait de le dire.
+  const dit = (ouvert) => renderLaLecture(unEtat({ dejaLus: [], depotOuvert: ouvert }))
+    .match(/data-lecture-cr-ouvrir-depot aria-expanded="([^"]*)"/)?.[1];
+
+  assert.equal(dit(false), "false");
+  assert.equal(dit(true), "true");
+});
+
+test("on n'ouvre pas de dépôt par-dessus ce qu'on est en train de lire", () => {
+  // Il faudrait d'abord sortir du document, et le bouton inviterait à un geste
+  // qui ne peut pas aboutir.
+  const ouvert = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, fichier: { name: "CR_17.pdf" }
+  }));
+  assert.doesNotMatch(ouvert, /data-lecture-cr-ouvrir-depot/);
+
+  const conservee = renderLaLecture(unEtat({
+    conservee: { id: "c-1" }, phase: "lue", lecture: uneLecture(), pagesLues: PAGES
+  }));
+  assert.doesNotMatch(conservee, /data-lecture-cr-ouvrir-depot/);
 });
 
 test("le choix dit ce qu'on lit, et ce qui attend à la fin", () => {
@@ -2398,7 +2457,11 @@ test("une famille vide dit laquelle, et quoi faire", () => {
   }));
 
   assert.match(html, /Aucun fil de mails analysé/);
-  assert.match(html, /depuis Fichiers/);
+  // **Et quoi faire.** C'était « depuis Fichiers », le bouton de la zone de
+  // dépôt ; elle est désormais fermée au repos, et c'est « + Documents » qui
+  // porte le geste. Une famille vide sans chemin de sortie laisse devant un
+  // écran dont on ne sait pas quoi faire.
+  assert.match(html, /data-lecture-cr-ouvrir-depot/);
 });
 
 /** La liste n'est qu'à l'accueil : sous une lecture, elle ferait doublon. */
@@ -2940,4 +3003,46 @@ test("une analyse rouverte dit qu'elle ne se recalcule pas", () => {
   assert.match(html, /lecture-cr__photo/);
   assert.match(html, /ne se recalcule pas/);
   assert.match(html, /2026-10-02/);
+});
+
+/* ── Changer de chantier ─────────────────────────────────────────────────── */
+
+/**
+ * **Le défaut que ces épreuves gardent.**
+ *
+ * L'état de cet écran vit au niveau du module — c'est voulu : une lecture d'une
+ * minute et demie doit survivre à un aller-retour dans l'Atelier. Mais le module
+ * survit aussi au changement de chantier : on ouvrait un projet, on regardait
+ * ses documents, on passait à un autre, et la liste du premier restait. Il
+ * fallait recharger la page pour en sortir — et tant qu'on ne le faisait pas, on
+ * lisait les documents d'un chantier en croyant lire ceux d'un autre.
+ *
+ * Un écran vide se remarque ; un écran qui montre autre chose, non.
+ */
+test("changer de chantier fait repartir l'écran à neuf", () => {
+  assert.equal(leChantierAChange("p-1", "p-2"), true);
+});
+
+test("le même chantier ne fait rien repartir", () => {
+  // C'est le cas de presque tous les redessins — et il y a un redessin par clic.
+  // Repartir à neuf à chacun effacerait la lecture en cours.
+  assert.equal(leChantierAChange("p-1", "p-1"), false);
+});
+
+test("le premier chantier n'est pas un changement", () => {
+  // L'état neuf est déjà le sien : le remplacer par un autre état neuf ne ferait
+  // que perdre ce qu'on vient d'y charger.
+  assert.equal(leChantierAChange("", "p-1"), false);
+});
+
+test("un chantier inconnu ne décide de rien", () => {
+  // La route peut le poser après le premier dessin ; repartir à neuf sur une
+  // absence effacerait une lecture en cours à chaque redessin (règle 5).
+  assert.equal(leChantierAChange("p-1", ""), false);
+  assert.equal(leChantierAChange("p-1", null), false);
+  assert.equal(leChantierAChange("", ""), false);
+});
+
+test("les espaces autour d'un identifiant ne font pas un autre chantier", () => {
+  assert.equal(leChantierAChange(" p-1 ", "p-1"), false);
 });

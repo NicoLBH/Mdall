@@ -30,8 +30,8 @@ import {
   renderDataTableHead, renderDataTableShell
 } from "./data-table-shell.js";
 import {
-  LES_FAMILLES, TOUTES, ceQueDitLaFamille, lesComptesParFamille, parFamille,
-  phraseDeLaFamille
+  CE_QUE_DIT_LETAT, LES_FAMILLES, OU_EN_EST, TOUTES, ceQueDitLaFamille,
+  lesComptesParEtat, lesComptesParFamille, parEtat, parFamille
 } from "../../services/les-documents-analyses.js";
 import { leCompteDit } from "../../services/les-familles-de-document.js";
 
@@ -43,6 +43,9 @@ export const CHOISIR_UNE_FAMILLE = "data-famille-analysee";
 
 /** L'attribut par lequel il reconnaît un clic sur une ligne du tableau. */
 export const OUVRIR_UN_DOCUMENT = "data-document-analyse";
+
+/** Celui par lequel il reconnaît un clic sur une pastille du filtre. */
+export const FILTRER_PAR_ETAT = "data-etat-analyse";
 
 /**
  * Le rail des familles.
@@ -112,7 +115,8 @@ export function renderLeRailDesFamilles({
  * @param {string} [quoi.ouverte] l'identifiant du document ouvert, s'il y en a un
  */
 export function renderLeTableauDesDocuments({
-  documents = null, famille = TOUTES, enCours = false, rate = false, ouverte = ""
+  documents = null, famille = TOUTES, enCours = false, rate = false, ouverte = "",
+  filtre = ""
 } = {}) {
   const ce = ceQueDitLaFamille(famille) ?? ceQueDitLaFamille(TOUTES);
 
@@ -138,30 +142,86 @@ export function renderLeTableauDesDocuments({
     </section>`;
   }
 
-  const ici = parFamille(documents, famille);
+  const deLaFamille = parFamille(documents, famille);
+  /**
+   * **Les pastilles comptent la famille ouverte, et non le chantier entier.**
+   * « En attente (5) » sous Mails doit dire cinq mails, sinon cliquer dessus en
+   * rendrait trois.
+   */
+  const comptes = lesComptesParEtat(deLaFamille);
+  const ici = parEtat(deLaFamille, filtre);
 
   return `
     <section class="documents-analyses">
-      <p class="documents-analyses__aide mono-small">${escapeHtml(
-        phraseDeLaFamille(famille, documents))}</p>
+      ${/*
+        **La phrase d'aide s'en va.** « 19 documents analysés. Cliquer sur une
+        ligne rouvre son analyse » redisait le compte que l'en-tête porte déjà,
+        et expliquait un geste qu'on fait sans qu'on le dise. Ce qui comptait —
+        combien, et dans quel état — est passé dans les pastilles.
+      */""}
       ${renderDataTableShell({
         className: "documents-analyses__table",
         gridTemplate: "minmax(280px,2fr) 240px",
         state: ici.length ? "ready" : "empty",
-        emptyHtml: renderDataTableEmptyState({ title: ce.vide.titre, description: ce.vide.quoi }),
+        emptyHtml: renderDataTableEmptyState(filtre
+          ? {
+            title: `Aucun document ${CE_QUE_DIT_LETAT[filtre].toLocaleLowerCase("fr")}`,
+            description: "Le filtre en haut du tableau en montre d'autres."
+          }
+          : { title: ce.vide.titre, description: ce.vide.quoi }),
         headHtml: renderDataTableHead({
           columns: [{
-            html: renderDataTableCount({
+            html: `${renderDataTableCount({
               iconeHtml: svgIcon(ce.icone, { className: "octicon" }),
-              dit: leCompteDit(famille, ici.length),
-              titre: "Les documents dont l'analyse est conservée"
-            }),
+              dit: leCompteDit(famille, deLaFamille.length),
+              titre: "Les documents de cette famille"
+            })}${renderLesPastillesDuFiltre(comptes, filtre)}`,
             className: COLONNE_DU_COMPTE
           }]
         }),
         bodyHtml: ici.map((un) => renderUnDocumentAnalyse(un, { ouverte, famille })).join("")
       })}
     </section>
+  `;
+}
+
+/**
+ * Les pastilles de comptage, qui filtrent le tableau.
+ *
+ * ## Pourquoi deux pastilles et non trois
+ *
+ * « Tous » n'en est pas une : c'est l'état de repos, celui où aucune pastille
+ * n'est allumée. Une troisième aurait demandé de choisir entre trois boutons
+ * pour revenir à ce qu'on voyait en arrivant.
+ *
+ * **Une pastille allumée se rééteint au clic.** Sans cela, il n'y aurait aucun
+ * chemin de retour vers la liste entière, et l'on chercherait un bouton qui
+ * n'existe pas.
+ *
+ * ## Un état sans document garde sa pastille
+ *
+ * « En attente (0) » est une réponse : rien n'est en cours. La faire disparaître
+ * obligerait à se demander si le filtre existe encore (règle 5).
+ */
+function renderLesPastillesDuFiltre(comptes, filtre = "") {
+  return `
+    <span class="documents-analyses__filtre" role="group" aria-label="Filtrer par état">
+      ${[OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE].map((ou) => {
+        const actif = texte(filtre) === ou;
+        return `
+          <button type="button"
+            class="documents-analyses__pastille${actif ? " est-active" : ""}"
+            ${FILTRER_PAR_ETAT}="${escapeHtml(actif ? "" : ou)}"
+            aria-pressed="${actif}"
+            title="${escapeHtml(actif
+              ? "Montrer de nouveau tous les documents"
+              : `Ne montrer que ce qui est ${CE_QUE_DIT_LETAT[ou].toLocaleLowerCase("fr")}`)}"
+          >${escapeHtml(CE_QUE_DIT_LETAT[ou])}
+            <span class="documents-analyses__compte">${Number(comptes?.[ou]) || 0}</span>
+          </button>
+        `;
+      }).join("")}
+    </span>
   `;
 }
 
@@ -179,9 +239,11 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
   const ouvert = texte(ouverte) && texte(ouverte) === texte(document?.id);
   const ce = ceQueDitLaFamille(document?.famille);
   const melange = texte(famille) === TOUTES;
+  const attend = (document?.ou ?? OU_EN_EST.ANALYSE) === OU_EN_EST.ATTENTE;
 
   return `
-    <div class="data-table-shell__row documents-analyses__ligne${ouvert ? " est-ouverte" : ""}">
+    <div class="data-table-shell__row documents-analyses__ligne${ouvert ? " est-ouverte" : ""}${
+      attend ? " est-en-attente" : ""}">
       <div class="data-table-shell__cell data-table-shell__cell--titre">
         <span class="issue-row-title-grid">
           <span class="issue-row-title-grid__status" ${
@@ -192,10 +254,18 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
               **L'identifiant porte la famille.** Deux tables différentes peuvent
               rendre le même identifiant, et l'écran doit savoir où aller le
               rechercher — comme il doit savoir quel détail dessiner.
+
+              **Un document qui attend ne s'ouvre pas** : il n'a pas d'analyse à
+              montrer. Un titre qui se clique pour ne rien ouvrir se lit comme un
+              écran en panne (règle 5) — il reste donc du texte, et le badge dit
+              pourquoi.
             */""}
-            <button type="button" class="row-title-trigger theme-text theme-text--pb"
-              ${OUVRIR_UN_DOCUMENT}="${escapeHtml(`${document.famille}:${document.id}`)}"
-            >${escapeHtml(document.titre)}</button>
+            ${attend
+              ? `<span class="documents-analyses__titre">${escapeHtml(document.titre)}</span>`
+              : `<button type="button" class="row-title-trigger theme-text theme-text--pb"
+                  ${OUVRIR_UN_DOCUMENT}="${escapeHtml(`${document.famille}:${document.id}`)}"
+                >${escapeHtml(document.titre)}</button>`}
+            ${renderLeBadgeDeLetat(document)}
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
             escapeHtml([
@@ -211,6 +281,31 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
       <div class="data-table-shell__cell mono-small">${escapeHtml(texte(document?.dit))}</div>
     </div>
   `;
+}
+
+/**
+ * Le badge qui dit où en est un document.
+ *
+ * ## Pourquoi un badge, et non une colonne
+ *
+ * Le tableau en a déjà une, à droite, qui dit ce que la lecture a valu — « 12
+ * avis », « 7 messages ». L'état n'est pas une mesure : c'est ce qui dit si la
+ * mesure existe. Posé à côté du titre, il se lit **avant** d'avoir parcouru la
+ * ligne, qui est le moment où l'on décide de cliquer ou non.
+ *
+ * Il reprend la coque des badges de l'application — celle des Actions —, et sa
+ * couleur dit l'action : bleu pour ce qui est fait et se rouvre, attention pour
+ * ce qu'on attend encore.
+ */
+function renderLeBadgeDeLetat(document) {
+  const attend = (document?.ou ?? OU_EN_EST.ANALYSE) === OU_EN_EST.ATTENTE;
+
+  return `<span class="documents-analyses__badge documents-analyses__badge--${
+    attend ? "attente" : "analyse"}" title="${escapeHtml(attend
+      ? texte(document?.motif) || "Cette lecture a été lancée et n'est pas revenue"
+      : "L'analyse est conservée : cliquer sur le titre la rouvre")}"
+  >${svgIcon(attend ? "history" : "check-circle", { className: "octicon" })}${
+    escapeHtml(attend ? "En attente" : "Analysé")}</span>`;
 }
 
 /**

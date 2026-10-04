@@ -66,11 +66,13 @@ import {
 } from "../../../services/la-lecture-conservee.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
 import {
-  CHOISIR_UNE_FAMILLE, OUVRIR_UN_DOCUMENT, laFamilleDesignee, leDocumentDesigne,
+  CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, OUVRIR_UN_DOCUMENT, laFamilleDesignee,
+  leDocumentDesigne,
   renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "../../ui/les-documents-analyses.js";
 import {
-  FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses
+  FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses, lesDocumentsDuTableau,
+  lesDocumentsEnAttente
 } from "../../../services/les-documents-analyses.js";
 import {
   ceQueLaZoneDit, laFamilleQuiSeLit
@@ -171,6 +173,9 @@ const EST_UN_PDF = /\.pdf$/i;
  */
 const ACCEPTE = ceQueDitLaFamille(FAMILLE.CR).accepte;
 
+/** L'attribut par lequel l'écran reconnaît le bouton qui ouvre la zone de dépôt. */
+const OUVRIR_LE_DEPOT = "data-lecture-cr-ouvrir-depot";
+
 const estUnDocumentAccepte = (nom) => EST_UN_PDF.test(texte(nom)) || estUnFichierTexte(texte(nom));
 
 /**
@@ -246,223 +251,336 @@ const NOMS_DES_ONGLETS = {
 };
 
 /**
- * L'état de l'écran.
+ * L'état de l'écran, **neuf**.
  *
- * Au niveau du module, comme ailleurs dans l'Atelier : le panneau se redessine
- * à chaque venue, et une lecture perdue au redessin obligerait à redéposer le
- * document — c'est-à-dire à repayer l'appel.
+ * ## Pourquoi une fabrique, et non un objet
+ *
+ * L'état vivait au niveau du module, écrit une fois. C'est ce qu'il faut pour
+ * qu'une lecture survive à un aller-retour dans l'Atelier — la perdre au redessin
+ * obligerait à redéposer le document, c'est-à-dire à repayer l'appel.
+ *
+ * Mais le module, lui, survit aussi au **changement de chantier** : on quittait un
+ * projet, on en ouvrait un autre, et la liste du premier restait à l'écran. Il
+ * fallait recharger la page pour en sortir — et entre les deux, on regardait les
+ * documents d'un chantier en croyant regarder ceux d'un autre, ce qui est pire
+ * qu'un écran vide.
+ *
+ * **Une fabrique plutôt qu'une remise à zéro écrite à la main** : un champ oublié
+ * dans une liste de remises à zéro est exactement le défaut qu'on répare, et il ne
+ * se verrait qu'au champ suivant qu'on ajoute (règle 12).
  */
-const etat = {
-  phase: "vide", // vide | lecture | lue | echec
-  /**
-   * L'étape en cours, et donc celles qui sont faites.
-   *
-   * Un nom de `ETAPES` : tout ce qui le précède est acquis, tout ce qui le suit
-   * reste à faire. Un seul curseur plutôt qu'une case par étape — deux
-   * représentations du même avancement finiraient par ne plus s'accorder.
-   */
-  etape: "",
-  lecture: null,
-  /**
-   * Ce que cette lecture vaut **par rapport à la précédente**.
-   *
-   * `null` tant qu'on n'a pas comparé — et aussi quand on n'a pas pu lire les
-   * lectures d'avant : l'écran n'affiche alors aucun écart, plutôt que des
-   * « +0 » qui prétendraient que rien n'a bougé (règle 5).
-   */
-  suivi: null,
-  /**
-   * Ce qu'il y a à faire après une panne, **quand il y a quelque chose à faire**.
-   *
-   * Un dépassement de délai se rattrape — un document plus court, ou la même
-   * lecture relancée. Un refus du fournisseur, non : on n'invente pas une suite
-   * pour les pannes qui n'en ont pas (règle 5).
-   */
-  queFaire: "",
-  /**
-   * Les pages telles qu'elles sont sorties du PDF, texte compris.
-   *
-   * La lecture assemblée n'en garde que le nombre de caractères : il lui
-   * suffit. Le document refait, lui, a besoin du texte — et le redemander
-   * signifierait rouvrir le PDF pour quelque chose qu'on a déjà eu.
-   */
-  pagesLues: [],
-  /** `null` : on n'a pas pu lire les sujets du projet — différent de « aucun ». */
-  confrontes: null,
-  /**
-   * Les labels du projet. `null` : on n'a pas pu les lire.
-   *
-   * Sert à dire si « CR chantier » existe déjà, ou si la proposition le
-   * créerait. Ne pas savoir n'est pas « il n'y est pas » (règle 5).
-   */
-  labels: null,
-  /**
-   * Les lots du projet. `null` : on n'a pas pu les lire.
-   *
-   * Sert à dire lesquels des lots du compte rendu manquent. Ne pas savoir n'est
-   * pas « le projet n'en a aucun » : on proposerait alors d'ajouter des lots
-   * qui sont peut-être déjà là, et personne ne nettoierait (règle 5).
-   */
-  lots: null,
-  /**
-   * Les objectifs du projet. `null` : on n'a pas pu les lire.
-   *
-   * Sert à dire lesquels existent déjà à la date d'une échéance. Ne pas savoir
-   * n'est pas « il n'y en a aucun » (règle 5).
-   */
-  objectifs: null,
-  /**
-   * Les propositions ouvertes, pour le menu « Transformer ».
-   *
-   * `null` n'est pas « aucune » : le menu affiche alors une ligne éteinte qui
-   * le dit, plutôt que de faire ouvrir une seconde proposition à côté de celle
-   * qu'on ne voyait pas (règle 5).
-   */
-  branches: [],
-  /**
-   * Où en est « Transformer », ou `null` : `{enCours, dit}`.
-   *
-   * **Une sortie qui ne dit rien ne se distingue pas d'un bouton mort.** Ranger
-   * le document et rédiger la proposition prennent plusieurs secondes ; sans
-   * cette ligne, on recliquait, puis on changeait d'écran au milieu.
-   */
-  versement: null,
-  /**
-   * Le squelette du document, tel qu'il a été reconnu. `null` : pas reconnu.
-   *
-   * Il s'affiche parce qu'il **décide** : c'est lui qui impose les colonnes des
-   * douze pages. Un squelette faux donnerait douze pages fausses de la même
-   * façon, ce qui se voit bien moins qu'une page fausse sur douze
-   * (fondamental 13 — ce que l'IA produit s'affiche avant d'être exploité).
-   */
-  structure: null,
-  /**
-   * Les sujets du projet, et ceux qui portent le label du compte rendu.
-   *
-   * `null` de part et d'autre : on n'a pas pu lire. Sans eux, aucune
-   * disparition ne se relève — déclarer disparu un sujet dont on ne sait pas
-   * s'il vient d'un compte rendu poserait une question sur rien (règle 5).
-   */
-  sujetsDuProjet: null,
-  sujetsDuLabel: null,
-  /**
-   * Les situations du projet. `null` : on n'a pas pu les lire.
-   *
-   * Sans elles on ne peut pas affirmer qu'aucune ne suit déjà le label — et
-   * l'on en proposerait une seconde sur le même ensemble (règle 5).
-   */
-  situations: null,
-  /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
-  deplie: "",
-  /**
-   * Les descriptions lues, par sujet.
-   *
-   * Absent : pas encore demandée. `null` : la lecture a échoué — différent
-   * d'une description vide, qui est une réponse (règle 5).
-   */
-  descriptions: {},
-  motif: "",
-  /**
-   * Ce que le serveur a nommé de la panne, s'il l'a nommée.
-   *
-   * Vide quand il n'a rien nommé : on n'invente pas une explication
-   * vraisemblable pour remplir le cadre (règle 5).
-   */
-  panne: "",
-  /**
-   * La ligne du document **dans le projet**, quand la lecture en vient.
-   *
-   * `null` quand le PDF vient du disque : il n'est rangé nulle part, et lui
-   * inventer un identifiant ferait deux lectures du même compte rendu se lire
-   * comme deux comptes rendus différents.
-   */
-  document: null,
-  /**
-   * Les comptes rendus déjà lus sur ce projet, et celui qu'on rouvre.
-   *
-   * `null` : on n'a pas encore demandé, ou on n'a pas pu. L'accueil ne dit
-   * alors pas « aucun » (règle 5).
-   */
-  dejaLus: null,
-  dejaLusEnCours: false,
-  /**
-   * Les deux autres familles de lectures de ce chantier.
-   *
-   * **`null` et non `[]`** : « on n'a pas encore demandé » et « il n'y en a
-   * aucune » n'appellent pas la même phrase, et la seconde ferait recommencer une
-   * lecture déjà faite — et déjà payée (règle 5).
-   */
-  dejaLusMails: null,
-  dejaLusControles: null,
-  /** Une demande qui a échoué. Sans ce drapeau, « pas encore demandé » se lirait comme une panne. */
-  dejaLusRate: false,
-  /** La famille ouverte dans le rail. On atterrit sur la vue d'ensemble. */
-  famille: TOUTES,
-  /** Le rail est-il déplié. */
-  railOuvert: true,
-  railLargeur: 0,
-  /**
-   * Un document d'une autre famille, ouvert depuis le tableau.
-   *
-   * Les comptes rendus ont leur propre chemin de réouverture, qui existe depuis
-   * des rounds et qui dessine l'écran entier. Les deux autres familles ont leur
-   * vue à elles : `{ famille, titre, vue }`.
-   */
-  ouvertAilleurs: null,
-  ouvertureEnCours: "",
-  /** La lecture conservée qu'on regarde, ou `null` quand on lit pour de vrai. */
-  conservee: null,
-  /**
-   * Où en est la relecture du document refait, dans Fichiers.
-   *
-   * `""` on n'a rien demandé · `"en-cours"` on attend · `"trouvee"` il est là ·
-   * `"absente"` on n'a pas su le retrouver. Les deux derniers ne se disent pas
-   * pareil à l'écran (règle 5).
-   */
-  relue: "",
-  /** Les sujets du projet **aujourd'hui**, à côté de ce que la lecture a vu. */
-  sujetsAujourdhui: null,
-  /** Le document déposé, gardé le temps de la lecture. */
-  fichier: null,
-  /**
-   * Le choix d'un document déjà dans Fichiers, s'il est ouvert.
-   *
-   * `null` : on ne choisit pas. Sinon `{dossier, breadcrumb, entrees, enCours,
-   * motif}` — et `entrees` vide avec `enCours` faux n'est pas « pas encore
-   * lu » : c'est un dossier qui ne contient rien (règle 5).
-   */
-  choix: null,
-  /**
-   * Ce qui est coché, tous dossiers confondus.
-   *
-   * **Un `Set`, et il traverse les dossiers.** On monte une file de trente
-   * comptes rendus en descendant quatre dossiers ; une sélection remise à zéro
-   * à chaque navigation aurait obligé à tout faire depuis un seul répertoire,
-   * c'est-à-dire presque jamais.
-   */
-  coches: new Set(),
-  /**
-   * Toutes les entrées rencontrées, par identifiant.
-   *
-   * La barre de lancement doit dire **combien de PDF** la file contient, et un
-   * document coché dans un dossier qu'on a quitté n'est plus dans `choix.entrees`.
-   * Sans cette mémoire, le coût annoncé aurait baissé en changeant de dossier.
-   */
-  connues: new Map(),
-  /**
-   * Ce qu'on dit après avoir lancé une lecture, ou `""`.
-   *
-   * **Pas une file.** Elle tournait ici, et bloquait l'écran une heure ; elle
-   * est au serveur (`supabase/functions/lire-les-comptes-rendus`), et c'est le
-   * journal des Actions qui la montre. Il ne reste donc qu'une phrase : c'est
-   * parti, allez voir là-bas.
-   */
-  lance: "",
+function unEtatNeuf() {
+  return {
+    phase: "vide", // vide | lecture | lue | echec
+    /**
+     * L'étape en cours, et donc celles qui sont faites.
+     *
+     * Un nom de `ETAPES` : tout ce qui le précède est acquis, tout ce qui le suit
+     * reste à faire. Un seul curseur plutôt qu'une case par étape — deux
+     * représentations du même avancement finiraient par ne plus s'accorder.
+     */
+    etape: "",
+    lecture: null,
+    /**
+     * Ce que cette lecture vaut **par rapport à la précédente**.
+     *
+     * `null` tant qu'on n'a pas comparé — et aussi quand on n'a pas pu lire les
+     * lectures d'avant : l'écran n'affiche alors aucun écart, plutôt que des
+     * « +0 » qui prétendraient que rien n'a bougé (règle 5).
+     */
+    suivi: null,
+    /**
+     * Ce qu'il y a à faire après une panne, **quand il y a quelque chose à faire**.
+     *
+     * Un dépassement de délai se rattrape — un document plus court, ou la même
+     * lecture relancée. Un refus du fournisseur, non : on n'invente pas une suite
+     * pour les pannes qui n'en ont pas (règle 5).
+     */
+    queFaire: "",
+    /**
+     * Les pages telles qu'elles sont sorties du PDF, texte compris.
+     *
+     * La lecture assemblée n'en garde que le nombre de caractères : il lui
+     * suffit. Le document refait, lui, a besoin du texte — et le redemander
+     * signifierait rouvrir le PDF pour quelque chose qu'on a déjà eu.
+     */
+    pagesLues: [],
+    /** `null` : on n'a pas pu lire les sujets du projet — différent de « aucun ». */
+    confrontes: null,
+    /**
+     * Les labels du projet. `null` : on n'a pas pu les lire.
+     *
+     * Sert à dire si « CR chantier » existe déjà, ou si la proposition le
+     * créerait. Ne pas savoir n'est pas « il n'y est pas » (règle 5).
+     */
+    labels: null,
+    /**
+     * Les lots du projet. `null` : on n'a pas pu les lire.
+     *
+     * Sert à dire lesquels des lots du compte rendu manquent. Ne pas savoir n'est
+     * pas « le projet n'en a aucun » : on proposerait alors d'ajouter des lots
+     * qui sont peut-être déjà là, et personne ne nettoierait (règle 5).
+     */
+    lots: null,
+    /**
+     * Les objectifs du projet. `null` : on n'a pas pu les lire.
+     *
+     * Sert à dire lesquels existent déjà à la date d'une échéance. Ne pas savoir
+     * n'est pas « il n'y en a aucun » (règle 5).
+     */
+    objectifs: null,
+    /**
+     * Les propositions ouvertes, pour le menu « Transformer ».
+     *
+     * `null` n'est pas « aucune » : le menu affiche alors une ligne éteinte qui
+     * le dit, plutôt que de faire ouvrir une seconde proposition à côté de celle
+     * qu'on ne voyait pas (règle 5).
+     */
+    branches: [],
+    /**
+     * Où en est « Transformer », ou `null` : `{enCours, dit}`.
+     *
+     * **Une sortie qui ne dit rien ne se distingue pas d'un bouton mort.** Ranger
+     * le document et rédiger la proposition prennent plusieurs secondes ; sans
+     * cette ligne, on recliquait, puis on changeait d'écran au milieu.
+     */
+    versement: null,
+    /**
+     * Le squelette du document, tel qu'il a été reconnu. `null` : pas reconnu.
+     *
+     * Il s'affiche parce qu'il **décide** : c'est lui qui impose les colonnes des
+     * douze pages. Un squelette faux donnerait douze pages fausses de la même
+     * façon, ce qui se voit bien moins qu'une page fausse sur douze
+     * (fondamental 13 — ce que l'IA produit s'affiche avant d'être exploité).
+     */
+    structure: null,
+    /**
+     * Les sujets du projet, et ceux qui portent le label du compte rendu.
+     *
+     * `null` de part et d'autre : on n'a pas pu lire. Sans eux, aucune
+     * disparition ne se relève — déclarer disparu un sujet dont on ne sait pas
+     * s'il vient d'un compte rendu poserait une question sur rien (règle 5).
+     */
+    sujetsDuProjet: null,
+    sujetsDuLabel: null,
+    /**
+     * Les situations du projet. `null` : on n'a pas pu les lire.
+     *
+     * Sans elles on ne peut pas affirmer qu'aucune ne suit déjà le label — et
+     * l'on en proposerait une seconde sur le même ensemble (règle 5).
+     */
+    situations: null,
+    /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
+    deplie: "",
+    /**
+     * Les descriptions lues, par sujet.
+     *
+     * Absent : pas encore demandée. `null` : la lecture a échoué — différent
+     * d'une description vide, qui est une réponse (règle 5).
+     */
+    descriptions: {},
+    motif: "",
+    /**
+     * Ce que le serveur a nommé de la panne, s'il l'a nommée.
+     *
+     * Vide quand il n'a rien nommé : on n'invente pas une explication
+     * vraisemblable pour remplir le cadre (règle 5).
+     */
+    panne: "",
+    /**
+     * La ligne du document **dans le projet**, quand la lecture en vient.
+     *
+     * `null` quand le PDF vient du disque : il n'est rangé nulle part, et lui
+     * inventer un identifiant ferait deux lectures du même compte rendu se lire
+     * comme deux comptes rendus différents.
+     */
+    document: null,
+    /**
+     * Les comptes rendus déjà lus sur ce projet, et celui qu'on rouvre.
+     *
+     * `null` : on n'a pas encore demandé, ou on n'a pas pu. L'accueil ne dit
+     * alors pas « aucun » (règle 5).
+     */
+    dejaLus: null,
+    dejaLusEnCours: false,
+    /**
+     * Les deux autres familles de lectures de ce chantier.
+     *
+     * **`null` et non `[]`** : « on n'a pas encore demandé » et « il n'y en a
+     * aucune » n'appellent pas la même phrase, et la seconde ferait recommencer une
+     * lecture déjà faite — et déjà payée (règle 5).
+     */
+    dejaLusMails: null,
+    dejaLusControles: null,
+    /** Une demande qui a échoué. Sans ce drapeau, « pas encore demandé » se lirait comme une panne. */
+    dejaLusRate: false,
+    /** La famille ouverte dans le rail. On atterrit sur la vue d'ensemble. */
+    famille: TOUTES,
+    /** Le rail est-il déplié. */
+    railOuvert: true,
+    railLargeur: 0,
+    /**
+     * Un document d'une autre famille, ouvert depuis le tableau.
+     *
+     * Les comptes rendus ont leur propre chemin de réouverture, qui existe depuis
+     * des rounds et qui dessine l'écran entier. Les deux autres familles ont leur
+     * vue à elles : `{ famille, titre, vue }`.
+     */
+    ouvertAilleurs: null,
+    ouvertureEnCours: "",
+    /** La lecture conservée qu'on regarde, ou `null` quand on lit pour de vrai. */
+    conservee: null,
+    /**
+     * Où en est la relecture du document refait, dans Fichiers.
+     *
+     * `""` on n'a rien demandé · `"en-cours"` on attend · `"trouvee"` il est là ·
+     * `"absente"` on n'a pas su le retrouver. Les deux derniers ne se disent pas
+     * pareil à l'écran (règle 5).
+     */
+    relue: "",
+    /** Les sujets du projet **aujourd'hui**, à côté de ce que la lecture a vu. */
+    sujetsAujourdhui: null,
+    /** Le document déposé, gardé le temps de la lecture. */
+    fichier: null,
+    /**
+     * Le choix d'un document déjà dans Fichiers, s'il est ouvert.
+     *
+     * `null` : on ne choisit pas. Sinon `{dossier, breadcrumb, entrees, enCours,
+     * motif}` — et `entrees` vide avec `enCours` faux n'est pas « pas encore
+     * lu » : c'est un dossier qui ne contient rien (règle 5).
+     */
+    choix: null,
+    /**
+     * Ce qui est coché, tous dossiers confondus.
+     *
+     * **Un `Set`, et il traverse les dossiers.** On monte une file de trente
+     * comptes rendus en descendant quatre dossiers ; une sélection remise à zéro
+     * à chaque navigation aurait obligé à tout faire depuis un seul répertoire,
+     * c'est-à-dire presque jamais.
+     */
+    coches: new Set(),
+    /**
+     * Toutes les entrées rencontrées, par identifiant.
+     *
+     * La barre de lancement doit dire **combien de PDF** la file contient, et un
+     * document coché dans un dossier qu'on a quitté n'est plus dans `choix.entrees`.
+     * Sans cette mémoire, le coût annoncé aurait baissé en changeant de dossier.
+     */
+    connues: new Map(),
+    /**
+     * Ce qu'on dit après avoir lancé une lecture, ou `""`.
+     *
+     * **Pas une file.** Elle tournait ici, et bloquait l'écran une heure ; elle
+     * est au serveur (`supabase/functions/lire-les-comptes-rendus`), et c'est le
+     * journal des Actions qui la montre. Il ne reste donc qu'une phrase : c'est
+     * parti, allez voir là-bas.
+     */
+    lance: "",
+      /**
+     * L'état par lequel le tableau est filtré, ou `""` pour tous.
+     *
+     * Au repos il montre tout : c'est ce qu'on vient voir en arrivant, et un
+     * filtre posé d'office ferait chercher les documents qu'il cache.
+     */
+    filtre: "",
+    /**
+     * Les lectures lancées qui ne sont pas revenues.
+     *
+     * `[]` et non `null` : une file qu'on n'a pas su lire ne doit pas empêcher le
+     * tableau des analysés de s'afficher — c'est lui qui porte l'essentiel, et
+     * l'attente est un complément.
+     */
+    file: [],
+    /**
+     * La zone de dépôt est-elle ouverte ?
+     *
+     * **Fermée au repos.** Elle occupait un tiers de l'écran pour un geste qu'on
+     * fait une fois par lot, au-dessus du tableau qu'on vient consulter dix fois
+     * par jour. Le bouton « + Documents » l'ouvre, et elle se referme d'elle-même
+     * quand le dépôt est parti.
+     */
+    depotOuvert: false,
   /** L'onglet regardé. Voir `ONGLET`. */
-  onglet: ONGLET.RESTITUTION,
-  /** Le document restitué. Voir `renderRestitution`. */
-  md: etatDesReconstitutions()
-};
+    onglet: ONGLET.RESTITUTION,
+    /** Le document restitué. Voir `renderRestitution`. */
+    md: etatDesReconstitutions()
+  };
+}
+
+/**
+ * L'état courant, et le chantier auquel il appartient.
+ *
+ * `let` et non `const` : il se remplace en entier quand on change de projet. Rien
+ * ne le retient par référence — les gestes le lisent au moment où ils s'exécutent.
+ */
+let etat = unEtatNeuf();
+
+/**
+ * Le chantier dont l'état parle, ou `""` tant qu'on n'a rien chargé.
+ *
+ * Hors de l'état exprès : il doit **survivre** à son remplacement, puisque c'est
+ * lui qui dit quand remplacer.
+ */
+let leChantierDeLetat = "";
+
+/**
+ * Repartir à neuf quand on a changé de chantier.
+ *
+ * ## Le défaut que cela répare
+ *
+ * On ouvrait un projet, on regardait ses documents, on passait à un autre : la
+ * liste du premier restait. Il fallait recharger la page pour en sortir — et tant
+ * qu'on ne le faisait pas, on lisait les documents d'un chantier en croyant lire
+ * ceux d'un autre. Un écran vide se remarque ; un écran qui montre autre chose,
+ * non.
+ *
+ * L'état vit au niveau du module, et le module ne se recharge pas d'une page à
+ * l'autre. C'est voulu — une lecture d'une minute et demie doit survivre à un
+ * aller-retour dans l'Atelier —, mais ce qui doit survivre est la lecture **de ce
+ * chantier-là**.
+ *
+ * ## Pourquoi on remplace tout
+ *
+ * Remettre à zéro quelques champs choisis laisserait les autres : la lecture
+ * ouverte, le document d'une autre famille, la file lancée, les cases cochées. Ce
+ * sont trente champs, et celui qu'on oublierait ne se verrait qu'au suivant qu'on
+ * ajoute (règle 12).
+ *
+ * **Le premier passage ne remet rien à zéro** : il n'y a rien à perdre, et
+ * l'état neuf est déjà celui qu'il faut.
+ */
+function repartirSiLeChantierAChange() {
+  const ici = texte(store.currentProjectId);
+  if (!ici) return;
+
+  const change = leChantierAChange(leChantierDeLetat, ici);
+  leChantierDeLetat = ici;
+  if (change) etat = unEtatNeuf();
+}
+
+/**
+ * A-t-on changé de chantier depuis que cet état a été constitué ?
+ *
+ * Trois règles, et chacune a sa raison :
+ *
+ *  - **un chantier inconnu ne change rien.** La route peut le poser après le
+ *    premier dessin ; repartir à neuf sur une absence effacerait une lecture en
+ *    cours à chaque redessin (règle 5) ;
+ *  - **le premier chantier n'est pas un changement.** L'état neuf est déjà le
+ *    sien : le remplacer par un autre état neuf ne ferait que perdre ce qu'on
+ *    vient d'y charger ;
+ *  - **le même chantier n'est pas un changement**, ce qui est le cas de presque
+ *    tous les redessins — et un redessin par clic.
+ *
+ * @param {string} connu le chantier dont l'état parle, ou `""`
+ * @param {string} ici celui qu'on regarde maintenant
+ */
+export function leChantierAChange(connu = "", ici = "") {
+  const avant = texte(connu);
+  const maintenant = texte(ici);
+  if (!maintenant || !avant) return false;
+  return avant !== maintenant;
+}
 
 /**
  * L'état des reconstitutions, au repos.
@@ -581,6 +699,7 @@ let hoteCourant = null;
 export function renderLectureDesCr(hote) {
   if (!hote) return;
   hoteCourant = hote;
+  repartirSiLeChantierAChange();
   hote.innerHTML = renderLaLecture(etat);
   brancher(hote);
 }
@@ -683,10 +802,20 @@ function lesDocumentsDeLaVue(vue) {
   const crs = vue.dejaLus ?? null;
   if (mails === null && controles === null && crs === null) return null;
 
-  return lesDocumentsAnalyses({
-    mails: lesFilsLus(mails ?? []),
-    controles: lesRapportsLus(controles ?? []),
-    crs: lesComptesRendusLus(crs ?? [])
+  /**
+   * **Ce qui attend se mêle à ce qui est analysé**, dans le même tableau.
+   *
+   * Deux listes auraient demandé de regarder à deux endroits pour répondre à une
+   * seule question — « où en est ce document ? » —, et c'est précisément ce que
+   * cet écran a été fait pour éviter.
+   */
+  return lesDocumentsDuTableau({
+    analyses: lesDocumentsAnalyses({
+      mails: lesFilsLus(mails ?? []),
+      controles: lesRapportsLus(controles ?? []),
+      crs: lesComptesRendusLus(crs ?? [])
+    }),
+    enAttente: lesDocumentsEnAttente(vue.file ?? [])
   });
 }
 
@@ -780,7 +909,8 @@ function renderLesDocumentsAnalyses(vue) {
     famille: vue.famille,
     enCours: vue.dejaLusEnCours,
     rate: vue.dejaLusRate === true,
-    ouverte: texte(vue.ouvertureEnCours)
+    ouverte: texte(vue.ouvertureEnCours),
+    filtre: texte(vue.filtre)
   });
 }
 
@@ -971,6 +1101,23 @@ function renderEntete(vue = etat) {
              * le dise. On relit le compte rendu, c'est plus honnête et ça coûte
              * ce que ça coûte.
              */
+            /**
+             * **« + Documents », à gauche de Transformer.**
+             *
+             * Les deux gestes de cet écran se tiennent donc côte à côte : faire
+             * entrer des documents, et faire sortir ce qu'on en a tiré. Le vert
+             * dit celui qui ajoute, comme ailleurs dans l'application.
+             *
+             * Il ne paraît pas sur une lecture rouverte ni pendant qu'on regarde
+             * un document : on y déposerait par-dessus ce qu'on est en train de
+             * lire, et il faudrait d'abord en sortir.
+             */
+            vue.conservee || vue.ouvertAilleurs || vue.fichier ? "" : `
+              <button type="button" class="gh-btn gh-btn--sm gh-btn--success"
+                ${OUVRIR_LE_DEPOT} aria-expanded="${vue.depotOuvert === true}">
+                ${svgIcon("plus", { className: "octicon" })} Documents
+              </button>`}
+          ${
             vue.conservee ? "" : renderTransformer({
               id: "lectureCrTransformer",
               disabled: !pret || vue.versement?.enCours === true,
@@ -1063,6 +1210,20 @@ function renderVersement(versement = null) {
  */
 function renderDepot(vue) {
   const enLecture = vue.phase === "lecture";
+
+  /**
+   * **Fermée tant qu'on ne l'a pas ouverte.**
+   *
+   * Elle occupait un tiers de l'écran en permanence, au-dessus du tableau. Or
+   * déposer est un geste qu'on fait une fois par lot ; consulter ce qui a été
+   * analysé, dix fois par jour. Le rectangle en pointillés annonçait donc
+   * l'action secondaire comme si c'était la principale.
+   *
+   * Le bouton « + Documents » de l'en-tête l'ouvre, et elle se referme d'elle-même
+   * dès que le dépôt est parti : la laisser ouverte après coup rendrait l'écran
+   * qu'on venait de dégager.
+   */
+  if (!vue.depotOuvert) return "";
 
   // **Rien à accueillir quand le document est là.** La zone gardait un tiers de
   // l'écran pour redire ce qu'on venait de faire, et repoussait la restitution
@@ -3287,6 +3448,26 @@ function brancher(hote) {
       return;
     }
 
+    /**
+     * **La pastille avant la ligne.** Les deux vivent dans le même tableau, et
+     * une pastille examinée après la ligne n'aurait jamais sa chance sous un
+     * en-tête qui en porte une.
+     */
+    if (cible.closest(`[${OUVRIR_LE_DEPOT}]`)) {
+      etat.depotOuvert = !etat.depotOuvert;
+      redessiner(hote);
+      return;
+    }
+
+    const pastille = cible.closest(`[${FILTRER_PAR_ETAT}]`);
+    if (pastille) {
+      // La valeur vide rééteint le filtre : c'est le seul chemin de retour vers
+      // la liste entière.
+      etat.filtre = texte(pastille.getAttribute(FILTRER_PAR_ETAT));
+      redessiner(hote);
+      return;
+    }
+
     const ligne = cible.closest(`[${OUVRIR_UN_DOCUMENT}]`);
     if (ligne) {
       const vise = leDocumentDesigne(ligne.getAttribute(OUVRIR_UN_DOCUMENT));
@@ -3653,7 +3834,15 @@ async function lancerLaFile(hote) {
   // et c'est le journal des Actions qui la montre.
   etat.choix = null;
   etat.coches = new Set();
+  // **Et la zone de dépôt se referme.** Le geste est fait ; la laisser ouverte
+  // reprendrait l'écran qu'on vient de dégager, au moment précis où l'on veut
+  // revoir le tableau pour y suivre ce qui part.
+  etat.depotOuvert = false;
   etat.lance = leMotDuDepart(documents.length, famille);
+
+  // Ce qui part devient une ligne « en attente » du tableau : la relire tout de
+  // suite évite d'avoir à recharger l'écran pour voir son propre geste.
+  void chargerLesLecturesGardees(hote);
   redessiner(hote);
 }
 
@@ -3928,6 +4117,15 @@ async function lire(hote, fichier, piece = null) {
  */
 async function chargerLesLecturesGardees(hote) {
   etat.dejaLusEnCours = true;
+  /**
+   * **Le chantier d'où part la demande.**
+   *
+   * Quatre requêtes partent, et l'on peut changer de projet avant qu'elles
+   * reviennent. Sans ce repère, la réponse du premier chantier se poserait sur
+   * l'état du second : exactement le défaut qu'on vient de réparer, mais cette
+   * fois sans même un rechargement de page pour en sortir.
+   */
+  const partDe = texte(store.currentProjectId);
 
   try {
     const [base, { resolveCurrentBackendProjectId }] = await Promise.all([
@@ -3950,15 +4148,26 @@ async function chargerLesLecturesGardees(hote) {
      * — perdre la vue d'ensemble parce qu'une table est muette serait un mauvais
      * échange.
      */
-    const [crs, fils, rapports] = await Promise.all([
+    const [crs, fils, rapports, file] = await Promise.all([
       base.listerLesLectures(projet, { limite: 300 }),
       lesFilsDuProjet(projet),
-      lesRapportsDuProjet(projet)
+      lesRapportsDuProjet(projet),
+      /**
+       * **Ce qui a été lancé et n'est pas revenu**, pour la pastille « En attente ».
+       * Quatrième requête indépendante : l'enchaîner aurait ajouté son attente à
+       * celle des trois autres, pour une colonne de plus.
+       */
+      laFileDuProjet(projet)
     ]);
+
+    // On a changé de chantier pendant l'attente : cette réponse n'est plus la
+    // bonne, et l'état qui l'attendait n'existe plus.
+    if (leChantierAChange(partDe, texte(store.currentProjectId))) return;
 
     etat.dejaLus = crs;
     etat.dejaLusMails = fils;
     etat.dejaLusControles = rapports;
+    etat.file = file;
     // **Rien n'est revenu des trois** : ce n'est pas « rien n'a été analysé ».
     etat.dejaLusRate = crs === null && fils === null && rapports === null;
   } catch {
@@ -3967,6 +4176,26 @@ async function chargerLesLecturesGardees(hote) {
   } finally {
     etat.dejaLusEnCours = false;
     redessiner(hote);
+  }
+}
+
+/**
+ * Les lectures lancées qui n'ont pas abouti, ou qui tournent encore.
+ *
+ * **Les échecs en font partie.** Une lecture qui n'a pas abouti et qui
+ * disparaîtrait du tableau serait une lecture qu'on croit faite (règle 5) ; elle
+ * reste en attente jusqu'à ce qu'on la relance.
+ *
+ * `[]` sur une panne, et non `null` : l'attente est un complément du tableau, et
+ * la perdre ne doit pas empêcher les analysés de s'afficher.
+ */
+async function laFileDuProjet(projet) {
+  try {
+    const { lesVersementsEnCours } =
+      await import("../../../services/la-file-des-versements-supabase.js");
+    return (await lesVersementsEnCours(projet, { dontLesEchecs: true })) ?? [];
+  } catch {
+    return [];
   }
 }
 

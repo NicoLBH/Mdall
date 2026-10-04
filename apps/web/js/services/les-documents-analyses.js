@@ -49,6 +49,7 @@ import {
  * savoir que le registre descend aussi au serveur.
  */
 export { CE_QUE_DIT_LA_FAMILLE, FAMILLE, LES_FAMILLES, TOUTES, ceQueDitLaFamille };
+import { leGesteDeLaLigne } from "./reveiller-la-file.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -182,6 +183,160 @@ export function lesDocumentsAnalyses({ mails = [], controles = [], crs = [] } = 
   return tout.sort((a, b) => b.lueLe.localeCompare(a.lueLe));
 }
 
+/* ── Ce qui a été lancé, et qui n'est pas revenu ─────────────────────────── */
+
+/**
+ * Où en est un document du tableau.
+ *
+ * **Deux états, et non un drapeau.** « Analysé » et « en attente » se comptent,
+ * se filtrent et se disent chacun avec ses mots ; un booléen `analyse` aurait
+ * forcé chaque lecteur à inventer le nom de l'autre cas (règle 10).
+ */
+export const OU_EN_EST = {
+  /** La lecture est faite, et se rouvre. */
+  ANALYSE: "analyse",
+  /** Elle a été lancée et n'est pas revenue — ou elle a échoué. */
+  ATTENTE: "attente"
+};
+
+/** Ce que l'écran écrit sur la pastille de chaque état. */
+export const CE_QUE_DIT_LETAT = {
+  [OU_EN_EST.ANALYSE]: "Analysés",
+  [OU_EN_EST.ATTENTE]: "En attente"
+};
+
+/** Ce qu'un pas de la file dit de lui-même, quand il n'est pas encore lu. */
+const CE_QUE_DIT_LE_PAS = {
+  attend: "en attente de lecture",
+  "en-cours": "lecture en cours",
+  echoue: "la lecture n'a pas abouti"
+};
+
+/**
+ * Les documents qu'une ligne de file attend encore.
+ *
+ * ## Ce qu'on prend, et ce qu'on laisse
+ *
+ * On prend les pas qui **attendent**, ceux **en cours**, et ceux qui ont
+ * **échoué**. On laisse ceux qui sont lus : ils ont une lecture conservée, et la
+ * reprendre ici les montrerait deux fois — une fois en attente, une fois
+ * analysés, pour le même document.
+ *
+ * Un échec reste à l'écran tant qu'on ne l'a pas relancé. C'est voulu : une
+ * lecture qui n'a pas abouti et qui disparaîtrait serait une lecture qu'on croit
+ * faite (règle 5).
+ *
+ * ## Une ligne sans avancement attend tout entière
+ *
+ * Elle vient d'être posée, le serveur ne l'a pas encore prise : ses documents
+ * attendent tous, et le dire vaut mieux que d'attendre le premier battement pour
+ * les faire apparaître.
+ */
+export function lesDocumentsEnAttente(lignes = []) {
+  const vus = new Set();
+  const documents = [];
+
+  for (const ligne of liste(lignes)) {
+    const famille = leGesteDeLaLigne(ligne);
+    if (!ceQueDitLaFamille(famille) || famille === TOUTES) continue;
+
+    const quand = texte(ligne?.cree_le);
+    const pas = liste(ligne?.avancement?.pas);
+    // **Les pièces de la ligne quand elle n'a pas encore d'avancement.** Les
+    // mails portent des fichiers, les lectures des documents du projet.
+    const pieces = pas.length
+      ? pas
+      : [...liste(ligne?.documents), ...liste(ligne?.fichiers)].map((un) => ({
+        id: texte(un?.id) || texte(un?.chemin) || texte(un?.nom),
+        nom: texte(un?.nom),
+        ou: "attend"
+      }));
+
+    for (const une of pieces) {
+      if (une?.ou === "lu") continue;
+
+      const id = texte(une?.id);
+      if (!id) continue;
+
+      // Le même document relancé deux fois n'occupe qu'une ligne : c'est le
+      // document qu'on regarde, pas la tentative.
+      const cle = `${famille}:${id}`;
+      if (vus.has(cle)) continue;
+      vus.add(cle);
+
+      documents.push({
+        id,
+        famille,
+        titre: texte(une?.nom) || ceQueDitLaFamille(famille).nom,
+        repere: "",
+        quand: quand.slice(0, 10),
+        lueLe: quand,
+        dit: CE_QUE_DIT_LE_PAS[texte(une?.ou)] ?? CE_QUE_DIT_LE_PAS.attend,
+        luPar: "",
+        documentId: id,
+        propositionId: "",
+        combien: 0,
+        ou: OU_EN_EST.ATTENTE,
+        /** Pourquoi la lecture n'a pas abouti, quand elle a échoué. */
+        motif: texte(une?.motif)
+      });
+    }
+  }
+
+  return documents;
+}
+
+/**
+ * Tout ce que le tableau montre : ce qui attend, puis ce qui est analysé.
+ *
+ * **Ce qui attend vient en premier**, et c'est le seul ordre défendable : c'est
+ * la seule part sur laquelle on peut encore agir. Les analysés, eux, se lisent
+ * par date de lecture, du plus récent au plus ancien.
+ *
+ * `null` traverse : si l'on n'a pas su lire les lectures, on ne dresse pas un
+ * tableau qui laisserait croire qu'il n'y en a aucune (règle 5).
+ */
+export function lesDocumentsDuTableau({ analyses = null, enAttente = [] } = {}) {
+  if (analyses === null) return null;
+
+  const deja = new Set(liste(analyses)
+    .map((un) => `${un?.famille}:${texte(un?.documentId)}`)
+    .filter((cle) => !cle.endsWith(":")));
+
+  /**
+   * **Un document déjà analysé n'attend plus**, même si une ligne de file le
+   * nomme encore. Une file abandonnée en route, ou une relecture lancée sur un
+   * document déjà lu, le ferait sinon paraître dans les deux comptes.
+   */
+  const attente = liste(enAttente).filter((un) => !deja.has(`${un.famille}:${texte(un.documentId)}`));
+
+  return [
+    ...attente,
+    ...liste(analyses).map((un) => ({ ...un, ou: un?.ou ?? OU_EN_EST.ANALYSE }))
+  ];
+}
+
+/** Ceux d'un état, ou tous. */
+export function parEtat(documents = [], ou = "") {
+  const voulu = texte(ou);
+  if (!voulu) return liste(documents);
+  return liste(documents).filter((un) => (un?.ou ?? OU_EN_EST.ANALYSE) === voulu);
+}
+
+/**
+ * Combien de documents dans chaque état, pour la famille regardée.
+ *
+ * Les pastilles comptent **ce que le filtre montrerait**, et non le chantier
+ * entier : « En attente (5) » sous « Mails » doit dire cinq mails, sinon cliquer
+ * dessus en rendrait trois.
+ */
+export function lesComptesParEtat(documents = []) {
+  return {
+    [OU_EN_EST.ATTENTE]: parEtat(documents, OU_EN_EST.ATTENTE).length,
+    [OU_EN_EST.ANALYSE]: parEtat(documents, OU_EN_EST.ANALYSE).length
+  };
+}
+
 /** Ceux d'une famille, ou tous. */
 export function parFamille(documents = [], famille = TOUTES) {
   const voulue = texte(famille) || TOUTES;
@@ -201,25 +356,3 @@ export function lesComptesParFamille(documents = []) {
   return comptes;
 }
 
-/**
- * Ce que le tableau dit de lui-même, avant qu'on clique.
- *
- * Il ne dit pas « 12 documents » : ce qu'on vient y chercher est **de quoi** il
- * s'agit et **s'il y a de quoi comparer** — un document relu l'a été parce qu'on
- * ajustait une consigne, et c'est en comparant deux lectures qu'on voit si elle a
- * fait mieux.
- */
-export function phraseDeLaFamille(famille = TOUTES, documents = []) {
-  const ici = parFamille(documents, famille);
-  const ce = ceQueDitLaFamille(famille);
-  if (!ici.length) return ce ? ce.vide.quoi : "";
-
-  const relus = ici.filter((un) => un.combien > 1).length;
-  const dit = `${ici.length} document${ici.length > 1 ? "s" : ""} analysé${
-    ici.length > 1 ? "s" : ""}`;
-
-  return relus
-    ? `${dit}, dont ${relus} relu${relus > 1 ? "s" : ""} au moins une fois. `
-      + "Cliquer sur une ligne rouvre son analyse, telle qu'elle a été faite."
-    : `${dit}. Cliquer sur une ligne rouvre son analyse, telle qu'elle a été faite.`;
-}
