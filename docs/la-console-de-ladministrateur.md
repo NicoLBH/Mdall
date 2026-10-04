@@ -556,9 +556,10 @@ a une cinquième chose se lit comme un tableau complet.
 - **Le quota du plan Supabase.** Il ne se déduit d'aucune table. Les octets
   rangés se comptent ; la limite au-delà de laquelle ils ne rentreront plus, non
   — et l'inventer ferait une jauge fausse.
-- **Le trafic, et le temps passé dans l'application.** Il n'y a pas de table de
-  séances. La dernière venue de chaque compte se sait ; combien de temps il est
-  resté, non. Le fabriquer demanderait un mouchard sur chaque écran.
+- **Le temps de travail.** Le trafic, lui, se mesure — voir *5 quater*. Mais il
+  compte le temps où l'application est au premier plan et touchée : lire un
+  document à côté de l'écran n'y est pas, et un onglet oublié non plus. C'est de
+  la présence, pas du travail.
 - **L'état des fournisseurs dans le monde.** Voir plus haut.
 
 ### L'usage : pourquoi la médiane, et pas seulement la moyenne
@@ -610,6 +611,106 @@ octets sommés **par casier** — jamais « les dix plus gros documents », qui 
 utile et dont chaque ligne porterait le nom d'un fichier de chantier.
 `la-cloison-de-la-console.test.mjs` lit la migration, les modules emportés et le
 site construit, et refuse ces noms.
+
+## 5 quater. *Exploitation › Le trafic* — combien de monde, combien de temps
+
+### Ce qu'on disait ne pas savoir, et qu'on sait maintenant
+
+La rubrique précédente écrivait, dans « ce qu'on ne sait pas d'ici » :
+
+> **Le trafic, et le temps passé dans l'application.** Il n'y a pas de table de
+> séances. La dernière venue de chaque compte se sait ; combien de temps il est
+> resté, non.
+
+C'était vrai, et c'était un manque, pas une position. Une table de venues existe
+désormais : `venues`, quatre colonnes, et rien d'autre.
+
+| | |
+| --- | --- |
+| `owner_id` | posé par la base, jamais par l'appelant |
+| `commencee_le` | le début de la venue |
+| `vue_le` | le dernier battement |
+| `secondes_actives` | le temps **éveillé**, borné à chaque ajout |
+
+**Ni écran, ni chantier, ni geste, ni document.** « Qui a passé combien de temps
+sur quel chantier » serait utile, et ce serait un **journal de navigation** : on
+saurait qui lit quoi sans jamais lire une ligne. La promesse du produit est que
+le contenu ne traverse pas, et un journal de navigation la défait par la bande.
+L'épreuve de la cloison vérifie la liste des colonnes, et refuse nommément
+`project_id`, `page`, `route`, `document_id`.
+
+### Le piège, et la seule façon de ne pas y tomber
+
+Un onglet laissé ouvert toute la nuit, c'est huit heures. Compter le temps
+pendant lequel la page existe donnerait un « temps moyen d'utilisation » de
+plusieurs heures par jour — faux, et **flatteur** : le genre de chiffre qu'on
+finit par montrer à quelqu'un (règle 12).
+
+On ne compte donc que le temps **éveillé** :
+
+- l'onglet est au premier plan, **et**
+- il y a eu un geste — clic, frappe, défilement — dans les cinq dernières minutes.
+
+C'est une minute de plus par minute où les deux sont vrais, et rien sinon. Les
+seuils vivent dans `services/les-venues.js` : un battement par minute, cinq
+minutes d'éveil par geste, et une venue close après trente minutes de silence —
+revenir après le déjeuner n'est pas la même visite.
+
+**Ce que cela mesure reste « l'application était ouverte et quelqu'un la
+touchait »**, et non « quelqu'un travaillait ». L'écran l'écrit : un indicateur
+dont on a oublié ce qu'il mesure est pire qu'un indicateur manquant. Six mois
+plus tard, « temps moyen : 34 minutes » se lirait « ils travaillent 34 minutes
+par jour » (règle 5).
+
+### Le navigateur décide, la base borne
+
+Le navigateur décide **quand** battre : c'est lui qui sait si l'onglet est au
+premier plan. Il envoie donc un nombre de secondes, **donc il peut envoyer
+n'importe lequel** — un onglet réveillé après une heure de veille déclarerait
+une heure d'un coup.
+
+`prolonger_une_venue` le borne à trois cents secondes, et l'ajout y est atomique
+(deux onglets de la même personne feraient sinon deux lectures et deux écritures,
+et une minute disparaîtrait). La même borne est écrite des deux côtés parce que
+chacun doit tenir seul ; une épreuve lit la migration et vérifie que c'est le
+même nombre (règle 4).
+
+### Les venues ne sont pas les comptes
+
+C'est la seule confusion qui change une décision. Un produit ouvert quinze fois
+par jour par la même personne et un produit ouvert une fois par quinze personnes
+n'appellent ni le même tarif, ni le même écran d'accueil, ni la même inquiétude.
+`le_trafic_de_mdall` rend donc les deux, et l'écran les affiche côte à côte.
+
+**Et les comptes ne s'additionnent pas d'un pas à l'autre** : quelqu'un venu
+lundi et mardi compte une fois chaque jour, et deux si on somme. Le total de la
+fenêtre ne se déduit pas des pas, et on ne le fabrique pas — on rend le plus haut
+pas observé, nommé pour ce qu'il est.
+
+### Qui voit quoi
+
+| | |
+| --- | --- |
+| Chacun | écrit, lit, prolonge et **efface** ses propres venues |
+| Un autre utilisateur | rien — savoir quand un collègue était devant son écran n'est une information de chantier pour personne |
+| La clé publique | rien |
+| La console | le trafic **agrégé**, derrière la porte, et journalisé comme toute consultation |
+
+L'effacement par soi-même est le droit à l'effacement rendu réel plutôt qu'écrit
+dans une politique de confidentialité. Le prix est que le chiffre du trafic est
+diminuable par ceux qu'il compte, et c'est le bon prix : un indicateur
+d'exploitation ne vaut pas qu'on retienne les données de quelqu'un qui demande
+leur effacement.
+
+### La conservation, et ce qui n'est pas fait
+
+**Treize mois**, pour pouvoir comparer un mois à celui de l'an passé, et pas un
+jour de plus. `effacer_les_vieilles_venues()` le fait, derrière la porte.
+
+**Rien ne l'appelle encore**, et l'écran le dit plutôt que de laisser croire la
+purge faite : une durée de conservation écrite et jamais appliquée est pire
+qu'aucune, parce qu'elle se présente comme une garantie (règle 12). Il faudra un
+déclencheur — `pg_cron`, ou un appel depuis la console.
 
 ## 6. Ce qu'il faut décider et écrire — la conformité
 

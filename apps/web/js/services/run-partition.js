@@ -31,7 +31,9 @@
 
 import { LE_CADENAS_DUN_FICHIER } from "./le-dossier-des-mails.js";
 import { GESTE_DES_CR, GESTE_DES_MAILS } from "./reveiller-la-file.js";
-import { LES_FAMILLES, ceQueLaFileDit } from "./les-familles-de-document.js";
+import {
+  LES_FAMILLES, LES_LECTURES_DIRECTES, ceQueLaFileDit
+} from "./les-familles-de-document.js";
 
 /**
  * Les trois origines possibles.
@@ -138,11 +140,20 @@ export const ONGLETS = [
  * façon de ranger. Les familles disent où elles se rangent, là où elles disent
  * tout le reste (règle 10).
  */
-export const LORIGINE_DUN_GESTE = Object.fromEntries(
-  LES_FAMILLES
-    .map((famille) => [famille, ceQueLaFileDit(famille)?.origine])
-    .filter(([, ou]) => ou)
-);
+export const LORIGINE_DUN_GESTE = Object.fromEntries([
+  ...LES_FAMILLES
+    .map((famille) => [famille, ceQueLaFileDit(famille)?.origine]),
+  /**
+   * **Et les lectures qui ne passent pas par la file.**
+   *
+   * Une lecture de fil de mails n'a pas de ligne de file — elle est un appel,
+   * pas un lot —, mais elle a bien une ligne de journal, et il faut la ranger.
+   * Sans elle ici, l'origine retombait sur « projet », c'est-à-dire
+   * « Partagées » : on annonçait comme partagée une lecture que la base garde
+   * privée, et qui est un essai de l'Atelier.
+   */
+  ...Object.values(LES_LECTURES_DIRECTES).map((une) => [une.geste, une.origine])
+].filter(([, ou]) => ou));
 
 /**
  * L'origine d'un geste de la file.

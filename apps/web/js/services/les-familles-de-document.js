@@ -183,6 +183,27 @@ export const CE_QUE_DIT_LA_FAMILLE = {
      * qui sert, et il dit juste pour elles.
      */
     quoiAuChoix: { un: "mail", plusieurs: "mails" },
+    /**
+     * **Le geste que le journal porte quand cette famille se lit hors de la
+     * file**, et la seule famille qui en ait un.
+     *
+     * Un fil ne passe pas par la file : il monte une fois, tous ses messages
+     * ensemble, et le serveur n'a rien à vider. Mais **ne pas prendre la file
+     * n'est pas une raison de ne rien laisser au journal** : la file dit ce qui
+     * se passe, le journal dit ce qui s'est passé. On cliquait, on payait un
+     * appel, une lecture se rangeait — et Actions n'en disait pas un mot.
+     *
+     * Il lui faut un geste **à lui**, et non `mails` : ce mot-là est celui du
+     * **dépôt**, qui fait entrer de la matière et se range donc en
+     * « Versements ». Une lecture de fil relit ce qui est déjà là et n'en fait
+     * entrer aucun : c'est un essai, donc l'Atelier — la même règle que pour les
+     * comptes rendus (`docs/dou-vient-une-execution.md`).
+     */
+    laLectureDirecte: {
+      geste: "lecture_de_fil",
+      provenance: "Lecture d'un fil de mails",
+      origine: "atelier"
+    },
     vide: {
       titre: "Aucun fil de mails analysé",
       quoi: "Un ou plusieurs .eml : le fil se déplie, et les prises de position se "
@@ -334,6 +355,33 @@ export function laFamilleQuiSeLit(quoi) {
  * Écrit à partir du registre : un nom de fonction oublié ici et présent là-bas
  * ferait une file que personne ne réveille.
  */
+/**
+ * Les gestes que le journal porte pour une lecture **hors de la file**.
+ *
+ * **Dérivés du registre**, et non écrits une seconde fois : un geste nommé ici
+ * *et* là-bas aurait fini par ne plus désigner la même chose, et c'est la copie
+ * qu'on relit le moins qui serait restée fausse (règle 10).
+ *
+ * Une seule famille en déclare un — les mails. Les deux autres se lisent par la
+ * file, dont le geste *est* déjà celui du journal.
+ */
+export const LES_LECTURES_DIRECTES = Object.fromEntries(
+  LES_FAMILLES
+    .map((famille) => CE_QUE_DIT_LA_FAMILLE[famille]?.laLectureDirecte)
+    .filter((une) => une?.geste)
+    .map((une) => [une.geste, une])
+);
+
+/** Ce qu'un geste de lecture directe dit — sa provenance, son origine. */
+export function ceQueLaLectureDirecteDit(geste = "") {
+  return LES_LECTURES_DIRECTES[String(geste ?? "").trim()] ?? null;
+}
+
+/** Le geste que le journal porte quand cette famille se lit hors de la file. */
+export function leGesteDeLaLectureDirecte(famille) {
+  return CE_QUE_DIT_LA_FAMILLE[String(famille ?? "").trim()]?.laLectureDirecte?.geste ?? "";
+}
+
 export const LA_FONCTION_DU_GESTE = Object.fromEntries(
   LES_FAMILLES
     .map((famille) => [famille, CE_QUE_DIT_LA_FAMILLE[famille].fonction])

@@ -204,6 +204,45 @@ Et le bouton dit « Lire 7 mails », non « Lire 7 fils » : c'est `quoiAuChoix`
 registre — au moment du choix on désigne des mails, c'est à l'arrivée qu'ils font
 un fil.
 
+### Le geste s'inscrit au journal, même sans file
+
+> « Quand je clique sur lire 5 mails, il ne se passe rien, je ne vois rien non
+> plus dans Actions. »
+
+Les deux moitiés étaient vraies, et pour deux raisons différentes.
+
+**À l'écran**, la phrase de fin lisait `lu.fil`, que rien de ce module ne rend —
+le fil vit sous `lu.vue`. Chaque lecture **réussie** annonçait donc « 0 message
+lu », ce qui se lit « il ne s'est rien passé ». L'épreuve d'à côté passait
+pourtant le vrai objet : elle ne regardait que la phrase des mails manquants. Un
+compte qu'aucune épreuve ne lit peut valoir n'importe quoi, et celui-ci valait
+zéro depuis le premier jour (règle 5).
+
+**Dans Actions**, il n'y avait rien du tout. Un fil ne prend pas la file — c'est
+un appel, pas un lot —, et l'on en avait conclu qu'il n'avait rien à laisser.
+C'était une confusion : **la file dit ce qui se passe, le journal dit ce qui
+s'est passé**. Ne pas prendre l'une n'est pas une raison de ne rien laisser à
+l'autre. On cliquait, on payait un appel, une lecture se rangeait, et l'onglet qui
+raconte ce que le chantier a fait n'en disait pas un mot.
+
+Une ligne de `project_runs` est donc écrite — **y compris sur un échec**, parce
+qu'un appel payé qui n'aboutit pas est exactement le chiffre qu'on cherche quand
+on se demande pourquoi la facture monte (fondamental 13).
+
+Elle porte un geste **à elle**, `lecture_de_fil`, et non `mails` : ce mot-là est
+celui du **dépôt**, qui fait entrer de la matière et se range en « Versements ».
+Lire un fil relit ce qui est déjà là — c'est un essai, donc l'Atelier, la même
+règle que pour les comptes rendus. Le registre le déclare à côté de la famille,
+et `run-partition.js` le lit de là (règle 10).
+
+### Le fil déduplique, et un jeu d'essai doit le savoir
+
+Trois copies du même message ne font pas trois messages : c'est pour cela que le
+fil a été écrit. Un jeu d'essai où les mails ne diffèrent que par leur **nom**
+rendait donc un fil à un seul message — et une épreuve qui aurait compté les
+messages l'aurait trouvé à un sans que ce soit un défaut du code. Les mails du
+jeu d'essai portent désormais des dates et des corps distincts.
+
 ## Ajouter une famille — un plan, un cartouche, une notice
 
 C'est le point du registre `les-familles-de-document.js`. Il faut, et il suffit :

@@ -64,6 +64,9 @@ export const LA_SANTE = "sante";
 /** L'usage : le stockage, les documents, les venues. */
 export const LUSAGE = "usage";
 
+/** Le trafic : combien de monde, et combien de temps. */
+export const LE_TRAFIC = "trafic";
+
 /** Le journal des consultations de la console. */
 export const LES_CONSULTATIONS = "consultations";
 
@@ -96,6 +99,16 @@ export const LES_RUBRIQUES = [
     explication: "La moyenne par chantier recouvre deux produits différents : la "
       + "médiane et les extrêmes disent lequel. Les documents effacés s'y "
       + "comptent à part, parce que leurs octets restent."
+  },
+  {
+    cle: LE_TRAFIC,
+    onglet: ONGLET.EXPLOITATION,
+    libelle: "Le trafic",
+    icone: "pulse",
+    question: "Combien de monde vient, et combien de temps reste-t-il ?",
+    explication: "Des venues et des comptes — dix venues d'une personne ne font "
+      + "pas dix personnes. Le temps compté est celui où l'application est au "
+      + "premier plan et touchée : ce n'est pas du temps de travail."
   },
   {
     cle: LES_CONSULTATIONS,

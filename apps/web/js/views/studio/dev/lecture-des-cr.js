@@ -75,7 +75,7 @@ import {
   lesDocumentsEnAttente
 } from "../../../services/les-documents-analyses.js";
 import {
-  ceQueLaZoneDit, laFamilleQuiSeLit
+  ceQueLaZoneDit, laFamilleQuiSeLit, leGesteDeLaLectureDirecte
 } from "../../../services/les-familles-de-document.js";
 import { renderLeDetailDunFil } from "../../ui/le-detail-dun-fil.js";
 import { lesFilsLus } from "../../../services/la-lecture-dun-fil.js";
@@ -3915,6 +3915,10 @@ async function lancerLaFile(hote) {
  * ne justifie pas.
  */
 async function lireLeFilChoisi(hote, documents, projectId) {
+  // Le journal des exécutions veut une durée, et elle se compte d'ici : c'est le
+  // seul endroit qui sache quand le geste a commencé.
+  const commenceLe = Date.now();
+
   const [{ lireUnFilDeMails, leMotDuFilLu, phraseDuRefusDuFil }, stockage, messages, modele] =
     await Promise.all([
       import("../../../services/lire-un-fil-de-mails.js"),
@@ -3942,6 +3946,24 @@ async function lireLeFilChoisi(hote, documents, projectId) {
   });
 
   if (!lu.ok) {
+    /**
+     * **Un échec s'inscrit aussi.** Un appel payé qui n'aboutit pas doit se
+     * voir : sans sa ligne, Actions montrerait les lectures réussies et tairait
+     * celles qui ont coûté sans rien rendre — c'est exactement le chiffre qu'on
+     * cherche quand on se demande pourquoi la facture monte (fondamental 13).
+     */
+    const { enregistrerUneCourse } = await import("../../../services/project-runs-supabase.js");
+    await enregistrerUneCourse({
+      projectId,
+      geste: leGesteDeLaLectureDirecte(FAMILLE.MAIL),
+      titre: "Lecture d'un fil de mails",
+      resume: phraseDuRefusDuFil(lu.motif),
+      statut: "echec",
+      startedAt: new Date(commenceLe).toISOString(),
+      durationMs: Date.now() - commenceLe,
+      personnelle: true
+    }).catch(() => {});
+
     etat.choix = {
       ...etat.choix, enCours: false, etape: "",
       motif: `Le fil n'a pas pu être lu : ${phraseDuRefusDuFil(lu.motif)}.`
@@ -3953,13 +3975,48 @@ async function lireLeFilChoisi(hote, documents, projectId) {
   // **La lecture se conserve dans la même table que l'ancien utilitaire.** C'est
   // elle que le tableau de cet écran lit déjà, et que son détail sait rouvrir :
   // une seconde table aurait fait deux listes de fils lus (règle 4).
-  const [{ laLigneDunFil }, base] = await Promise.all([
+  const [{ laLigneDunFil }, base, { enregistrerUneCourse }] = await Promise.all([
     import("../../../services/la-lecture-dun-fil.js"),
-    import("../../../services/lectures-du-fil-supabase.js")
+    import("../../../services/lectures-du-fil-supabase.js"),
+    import("../../../services/project-runs-supabase.js")
   ]);
 
   const ligne = laLigneDunFil(lu.vue, { projectId });
   if (ligne) await base.conserverUneLectureDeFil(ligne);
+
+  /**
+   * **Et le geste s'inscrit au journal des exécutions.**
+   *
+   * Un fil ne passe pas par la file — c'est un appel, pas un lot —, et il n'y
+   * avait donc **rien dans Actions** : on cliquait, on payait un appel, une
+   * lecture se rangeait, et l'onglet qui raconte ce que le chantier a fait n'en
+   * disait pas un mot. « Je ne vois rien dans Actions » était exact.
+   *
+   * La file et le journal ne sont pas la même chose : la file dit **ce qui se
+   * passe**, le journal dit **ce qui s'est passé**. Ne pas prendre la file
+   * n'était pas une raison de ne rien laisser au journal (règle 5).
+   *
+   * `personnelle: true` : un fil dit qui a écrit quoi à qui. La ligne se lit par
+   * celui qui l'a lancée, comme la lecture qu'elle a produite.
+   */
+  await enregistrerUneCourse({
+    projectId,
+    // **Le geste de la lecture, et non celui du dépôt.** `mails` est le mot de
+    // la file qui range ce qu'on apporte : une ligne de journal qui le porte se
+    // classe en « Versements » et s'annonce « Dépôt de messagerie ». Lire un fil
+    // relit ce qui est déjà là — c'est un essai de l'Atelier (règle 10).
+    geste: leGesteDeLaLectureDirecte(FAMILLE.MAIL),
+    titre: texte(lu.vue?.fil?.objet) || "Lecture d'un fil de mails",
+    resume: leMotDuFilLu(lu),
+    statut: "ok",
+    startedAt: new Date(commenceLe).toISOString(),
+    durationMs: Date.now() - commenceLe,
+    personnelle: true
+  }).catch(() => {
+    // **Le journal qui ne s'écrit pas n'emporte pas la lecture.** Elle est
+    // conservée : c'est elle qui compte, et la perdre pour une ligne de journal
+    // serait payer l'appel deux fois.
+  });
 
   etat.choix = null;
   etat.coches = new Set();

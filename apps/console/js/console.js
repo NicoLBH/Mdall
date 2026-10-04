@@ -50,8 +50,8 @@ import { ONGLETS_DE_LA_CONSOLE } from "../partage/js/services/les-onglets-de-la-
 import { svgIcon } from "../partage/js/ui/icons.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import {
-  LA_SANTE, LES_COMPTES, LES_CONSULTATIONS, LUSAGE, laPremiereRubriqueDe, laRubriqueValide,
-  lesRubriquesDeLonglet, ongletDeLaRubrique
+  LA_SANTE, LES_COMPTES, LES_CONSULTATIONS, LE_TRAFIC, LUSAGE, laPremiereRubriqueDe,
+  laRubriqueValide, lesRubriquesDeLonglet, ongletDeLaRubrique
 } from "../partage/js/services/les-rubriques-de-la-console.js";
 import { renderProjectRail } from "../partage/js/views/ui/project-rail.js";
 import {
@@ -322,7 +322,7 @@ function dessinerLaRubrique(cle) {
    * phrase du journal des accès et la forme d'un échec — et c'est la troisième
    * copie qui aurait fini par ne plus dire la même chose (règle 4).
    */
-  const lexploitation = [LA_SANTE, LUSAGE, LES_CONSULTATIONS].includes(cle);
+  const lexploitation = [LA_SANTE, LUSAGE, LE_TRAFIC, LES_CONSULTATIONS].includes(cle);
 
   hote.innerHTML = `
     <div class="project-rail-layout">

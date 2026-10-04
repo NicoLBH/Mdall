@@ -254,10 +254,11 @@ export const CE_QUON_NE_SAIT_PAS_DICI = [
       + "l'inventer ferait une jauge fausse."
   },
   {
-    quoi: "Le trafic, et le temps passé dans l'application",
-    pourquoi: "il n'y a pas de table de séances. La dernière venue de chaque "
-      + "compte se sait ; combien de temps il est resté, non. Le fabriquer "
-      + "demanderait de poser un mouchard sur chaque écran."
+    quoi: "Le temps de travail",
+    pourquoi: "le trafic se mesure depuis novembre — voir la rubrique du même "
+      + "nom —, mais il compte le temps où l'application est au premier plan et "
+      + "touchée. Lire un document à côté de l'écran n'y est pas, et un onglet "
+      + "oublié non plus : c'est de la présence, pas du travail."
   },
   {
     quoi: "L'état des fournisseurs dans le monde",

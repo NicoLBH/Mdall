@@ -31,7 +31,7 @@ import {
  */
 test("l'ordre des rubriques est celui de la chaîne", () => {
   assert.deepEqual(LES_RUBRIQUES.map((une) => une.cle),
-    [LES_COMPTES, "sante", "usage", "consultations",
+    [LES_COMPTES, "sante", "usage", "trafic", "consultations",
      LE_CARBURANT, "reconnaissance", "prediction", "sujets", "idees", "manques"]);
 
   // **Les comptes viennent avant la chaîne, pas dedans** : ils répondent à une
@@ -45,11 +45,12 @@ test("l'ordre des rubriques est celui de la chaîne", () => {
    *
    * La santé d'abord : si rien ne répond, les chiffres d'usage de l'écran
    * suivant sont ceux d'une installation en panne, et on les lirait comme un
-   * creux d'activité. Les consultations ferment, parce qu'elles portent sur la
-   * console elle-même et non sur le produit.
+   * creux d'activité. Le trafic vient après l'usage : ce qu'il y a dedans avant
+   * qui vient le regarder. Les consultations ferment, parce qu'elles portent sur
+   * la console elle-même et non sur le produit.
    */
   assert.deepEqual(lesRubriquesDeLonglet(ONGLET.EXPLOITATION).map((une) => une.cle),
-    ["sante", "usage", "consultations"]);
+    ["sante", "usage", "trafic", "consultations"]);
 });
 
 /**

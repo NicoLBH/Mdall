@@ -40,8 +40,22 @@ function desOutils({ octetsDu, messagesDe, releverLeFil } = {}) {
   return {
     etapes,
     outils: {
-      octetsDu: octetsDu ?? (async (document) => ({
-        octets: unMail({ objet: `Objet de ${document.nom}` }), nom: document.nom
+      /**
+       * **Des mails réellement distincts**, et pas seulement de nom.
+       *
+       * Le fil déduplique — c'est ce pour quoi il a été écrit : trois copies du
+       * même message ne font pas trois messages. Un jeu d'essai où les trois
+       * mails ne diffèrent que par leur objet rendait donc un fil à **un**
+       * message, et toute épreuve qui aurait compté les messages l'aurait trouvé
+       * à un sans que ce soit un défaut du code (règle 10).
+       */
+      octetsDu: octetsDu ?? (async (document, rang = 0) => ({
+        octets: unMail({
+          objet: `Objet de ${document.nom}`,
+          quand: `Mon, ${2 + Number(document.nom.match(/\d+/)?.[0] ?? rang)} Mar 2026 09:00:00 +0100`,
+          propos: `Le support est humide, voir ${document.nom}.`
+        }),
+        nom: document.nom
       })),
       messagesDe: messagesDe ?? (async (octets, nom) => ({ messages: [{ octets, nom }] })),
       releverLeFil: releverLeFil ?? (async ({ messages }) => ({
@@ -110,6 +124,56 @@ test("un mail qui ne descend pas ne fait pas tomber le fil, et se compte", async
   assert.deepEqual(lu.perdus, ["mail-1.eml"]);
   assert.match(leMotDuFilLu(lu), /le fil est incomplet/);
   assert.match(leMotDuFilLu(lu), /1 mail n&#x27;a pas pu|1 mail n'a pas pu/);
+});
+
+/**
+ * **Le compte rendu à l'écran est celui du fil, et il se vérifie.**
+ *
+ * Il ne l'était pas : la phrase lisait `lu.fil`, que rien de ce module ne rend —
+ * le fil vit sous `lu.vue`. Chaque lecture réussie annonçait donc « 0 message
+ * lu », ce qui se lit « il ne s'est rien passé », et c'est ce qu'on a cru.
+ *
+ * L'épreuve d'à côté passait pourtant le vrai objet ; elle ne regardait que la
+ * phrase des manquants. **Un compte qu'aucune épreuve ne lit peut valoir
+ * n'importe quoi** (règle 5), et celui-ci valait zéro depuis le premier jour.
+ */
+test("la phrase de fin compte les messages du fil, et nomme son objet", async () => {
+  const { outils } = desOutils();
+  const lu = await lireUnFilDeMails(desMails(3), outils);
+
+  assert.equal(lu.ok, true, lu.motif);
+
+  // Trois mails, trois messages dans le fil. Le chiffre vient de `lu.vue.fil`.
+  assert.equal(lu.vue.fil.messages.length, 3,
+    "le fil ne porte pas les trois messages : l'épreuve suivante ne prouverait rien");
+
+  const dit = leMotDuFilLu(lu);
+  assert.match(dit, /^3 messages lus/,
+    `la phrase ne compte pas les messages lus : « ${dit} »`);
+  assert.doesNotMatch(dit, /^0 message/,
+    "la phrase annonce zéro sur une lecture qui a abouti : elle se lit « rien ne s'est passé »");
+
+  // L'objet du fil est nommé : deux lectures de suite rendraient sinon la même
+  // phrase, et l'on ne saurait pas laquelle vient d'aboutir.
+  assert.match(dit, new RegExp(lu.vue.fil.objet.slice(0, 12)),
+    `la phrase ne nomme pas le fil : « ${dit} »`);
+
+  // Et elle dit où la lecture est allée : chercher une proposition qui n'existe
+  // pas, puis douter du reste, est le défaut qu'on ferme (règle 1).
+  assert.match(dit, /rien n'entre en mémoire|rien n&#x27;entre en mémoire/, dit);
+});
+
+/** Un seul message s'accorde au singulier, et aucun ne ment sur le reste. */
+test("la phrase de fin s'accorde, et tient sur une lecture vide", async () => {
+  const { outils } = desOutils();
+  const un = await lireUnFilDeMails(desMails(1), outils);
+  assert.match(leMotDuFilLu(un), /^1 message lu /, leMotDuFilLu(un));
+
+  // **Et elle ne tombe pas sur rien.** La phrase sert aussi quand l'écran n'a
+  // pas d'objet à lui donner ; lever ici effacerait la trace du geste.
+  for (const rien of [null, undefined, {}, { vue: null }, { vue: { fil: null } }]) {
+    assert.match(leMotDuFilLu(rien), /^0 message lu/);
+  }
 });
 
 test("aucun mail choisi ne lance rien", async () => {
