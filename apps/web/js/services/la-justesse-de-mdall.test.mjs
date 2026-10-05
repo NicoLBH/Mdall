@@ -20,8 +20,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CE_QUE_LA_JUSTESSE_NE_DIT_PAS, LES_OUTILS, OUTIL, UNE_MESURE_VIEILLIT_EN_JOURS,
-  ceQueLaJustesseDit, ceQueLeBilanDit, lageDeLaMesure, letatDesOutils, loutilDit, unTaux
+  CE_QUE_LA_JUSTESSE_NE_DIT_PAS, COMMENT_UN_BILAN_ARRIVE, LES_OUTILS, OUTIL,
+  UNE_MESURE_VIEILLIT_EN_JOURS, ceQueLaJustesseDit, ceQueLeBilanDit, lageDeLaMesure,
+  letatDesOutils, loutilDit, unTaux
 } from "./la-justesse-de-mdall.js";
 
 /** Un repère fixe : l'âge d'une mesure ne doit pas dépendre du jour où l'on éprouve. */
@@ -257,6 +258,32 @@ test("l'ordre de la base n'est pas supposé", () => {
 });
 
 /* ── Les outils déclarés ──────────────────────────────────────────────────── */
+
+/**
+ * **« Jamais lancé » sans le geste qui le change est un constat inutile.**
+ *
+ * On a lancé une analyse dans le produit et l'écran est resté vide, ce qui était
+ * exact : ces outils ne déposent que depuis `--serveur`. Mais rien ne disait
+ * comment changer cela — quatre cartes qui ne se rempliront jamais (règle 12).
+ */
+test("chaque outil porte la commande qui le remplit", () => {
+  for (const outil of LES_OUTILS) {
+    assert.match(outil.commande, /^node scripts\/[a-z-]+\.mjs --serveur$/,
+      `${outil.cle} ne dit pas comment on le lance`);
+  }
+});
+
+test("l'écran dit que lancer une analyse ne le remplit pas", () => {
+  // C'est la confusion exacte qu'il faut lever, et elle est en premier : cet
+  // écran mesure le procédé, pas une analyse.
+  const premier = COMMENT_UN_BILAN_ARRIVE[0];
+  assert.match(premier.quoi, /Lancer une analyse ne remplit pas cet écran/);
+  assert.match(premier.pourquoi, /se répond dans le détail du document/);
+
+  const tout = COMMENT_UN_BILAN_ARRIVE.map((un) => `${un.quoi} ${un.pourquoi}`).join(" ");
+  assert.match(tout, /SUPABASE_JETON/, "l'environnement à poser n'est pas dit");
+  assert.match(tout, /--serveur/);
+});
 
 test("chaque outil déclare ce qu'il ne sait pas voir", () => {
   for (const outil of LES_OUTILS) {

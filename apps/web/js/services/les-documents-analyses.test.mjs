@@ -390,3 +390,24 @@ test("un pas en échec sort de la file comme un échec", () => {
     "un échec est encore rangé avec ce qui attend : rien ne le reprendra pourtant");
   assert.equal(par.get("d-3").motif, "le fichier est illisible");
 });
+
+/**
+ * **Un document en file n'a pas de date de document, et n'en invente pas.**
+ *
+ * Il portait `cree_le` — le jour où la lecture a été lancée. C'était juste tant
+ * que `quand` n'était qu'un mot dans la ligne de méta ; le tri par date de
+ * document en a fait un mensonge : un document mis en file ce matin remontait
+ * en tête d'un ordre qui promet « le plus récent du chantier », alors que
+ * personne ne sait de quand il date — on ne l'a pas encore lu.
+ *
+ * La date de la file reste dans `lueLe`, qui est exactement cela.
+ */
+test("un document en attente n'a pas de date de document, et garde celle de la file", () => {
+  const [attente] = lesDocumentsEnAttente([
+    uneFile("rapports", [{ id: "d-9", nom: "RICT-09.pdf", ou: "attend" }])
+  ]);
+
+  assert.equal(attente.quand, "",
+    "la date de la file passe pour la date du document : le tri le mettrait en tête");
+  assert.equal(attente.lueLe, "2026-10-04T09:00:00Z");
+});

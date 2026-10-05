@@ -66,7 +66,8 @@ import {
 } from "../../../services/la-lecture-conservee.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
 import {
-  CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, OUVRIR_UN_DOCUMENT, laFamilleDesignee,
+  CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, LE_MENU_DU_TRI, OUVRIR_UN_DOCUMENT,
+  TRIER_LES_DOCUMENTS, laFamilleDesignee,
   leDocumentDesigne,
   renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "../../ui/les-documents-analyses.js";
@@ -88,6 +89,11 @@ import { renderLidentiteDunDocument } from "../../ui/lidentite-dun-document.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../../ui/project-rail.js";
 import { renderLaSyntheseDunDocument } from "../../ui/la-synthese.js";
 import { renderLesPreuvesDeLaLecture } from "../../ui/les-preuves-de-la-lecture.js";
+import {
+  leNomDeLexportDesAnalyses, lexportDesAnalyses, phraseDeLexportDesAnalyses
+} from "../../../services/lexport-des-analyses.js";
+import { downloadJsonFile } from "../../../utils/download-file.js";
+import { basculerUnMenuDenTete } from "../../ui/menus-den-tete.js";
 import {
   DIT_DE_LA_RELUE, DIT_SANS_RELUE, laRestitutionRelue
 } from "../../../services/la-restitution-relue.js";
@@ -176,6 +182,9 @@ const ACCEPTE = ceQueDitLaFamille(FAMILLE.CR).accepte;
 
 /** L'attribut par lequel l'écran reconnaît le bouton qui ouvre la zone de dépôt. */
 const OUVRIR_LE_DEPOT = "data-lecture-cr-ouvrir-depot";
+
+/** Celui du bouton qui emporte tout ce que cet écran sait. */
+const TOUT_EXPORTER = "data-lecture-cr-exporter";
 
 const estUnDocumentAccepte = (nom) => EST_UN_PDF.test(texte(nom)) || estUnFichierTexte(texte(nom));
 
@@ -503,6 +512,12 @@ function unEtatNeuf() {
      */
     filtre: "",
     /**
+     * **L'ordre du tableau**, et il vit dans l'état plutôt que dans le DOM :
+     * un redessin — à chaque pastille, à chaque retour de lecture — le perdrait
+     * sinon, et l'on retrierait à la main dix fois dans un essai.
+     */
+    tri: "",
+    /**
      * Les lectures lancées qui ne sont pas revenues.
      *
      * `[]` et non `null` : une file qu'on n'a pas su lire ne doit pas empêcher le
@@ -815,6 +830,23 @@ export function renderLaLecture(vue = etat) {
  * phrase définitive. Les deux se ressemblent à l'écran et ne disent pas du tout la
  * même chose (règle 5).
  */
+/**
+ * Les lectures conservées des trois familles, pour l'export.
+ *
+ * **Les lignes brutes**, et non les documents normalisés : c'est l'analyse gelée
+ * qu'on vient chercher quand un essai ne donne rien, et `unDocumentAnalyse` ne
+ * la garde pas — il n'en garde que les mesures.
+ *
+ * `null` quand aucune famille n'a répondu : l'export le dit alors dans ses
+ * `manques`, au lieu d'exporter une liste vide qui se lirait « aucune analyse ».
+ */
+function lesAnalysesDeLaVue(vue) {
+  const toutes = [vue.dejaLusMails, vue.dejaLusControles, vue.dejaLus];
+  if (toutes.every((une) => une === null || une === undefined)) return null;
+
+  return toutes.flatMap((une) => (Array.isArray(une) ? une : []));
+}
+
 function lesDocumentsDeLaVue(vue) {
   const mails = vue.dejaLusMails ?? null;
   const controles = vue.dejaLusControles ?? null;
@@ -985,7 +1017,8 @@ function renderLesDocumentsAnalyses(vue) {
     enCours: vue.dejaLusEnCours,
     rate: vue.dejaLusRate === true,
     ouverte: texte(vue.ouvertureEnCours),
-    filtre: texte(vue.filtre)
+    filtre: texte(vue.filtre),
+    tri: texte(vue.tri)
   });
 }
 
@@ -1185,6 +1218,31 @@ function renderEntete(vue = etat) {
                 ${OUVRIR_LE_DEPOT} aria-expanded="${vue.depotOuvert === true}">
                 ${svgIcon("plus", { className: "octicon" })} Documents
               </button>`}
+          ${/*
+            **Tout exporter, et l'icône seule.**
+
+            > « Ajoute un bouton dans la ligne de titre qui permet de tout
+            >   exporter et ainsi te permettre d'analyser ce qui se passe dans
+            >   mes tests. Une simple icône export serait bien. »
+
+            Il ne paraît qu'à l'accueil de l'écran — là où le tableau est — et
+            pas sur une lecture rouverte : il exporte ce que le tableau porte,
+            et sur un document ouvert il exporterait ce qu'on ne regarde pas.
+
+            Son infobulle dit **ce qu'il emporte et combien**, parce que ce
+            fichier porte du contenu de chantier : un bouton qui ne le dit pas
+            ferait emporter sans savoir.
+          */""}
+          ${vue.conservee || vue.ouvertAilleurs || vue.fichier ? "" : `
+            <button type="button" class="gh-btn gh-btn--sm" ${TOUT_EXPORTER}
+              title="${escapeHtml(phraseDeLexportDesAnalyses({
+                documents: lesDocumentsDeLaVue(vue),
+                analyses: lesAnalysesDeLaVue(vue),
+                famille: vue.famille,
+                filtre: texte(vue.filtre)
+              }))}"
+              aria-label="Exporter tout ce que cet écran sait"
+            >${svgIcon("download", { className: "octicon" })}</button>`}
           ${
             vue.conservee ? "" : renderTransformer({
               id: "lectureCrTransformer",
@@ -3530,6 +3588,51 @@ function brancher(hote) {
     if (cible.closest(`[${OUVRIR_LE_DEPOT}]`)) {
       etat.depotOuvert = !etat.depotOuvert;
       redessiner(hote);
+      return;
+    }
+
+    /**
+     * **Le menu de tri s'ouvre, et un ordre se choisit.**
+     *
+     * Deux gestes, et le bouton d'ouverture est examiné avant les entrées :
+     * l'inverse marcherait aussi, mais l'ouverture passe par
+     * `menus-den-tete.js` et ne redessine rien — la mettre après obligerait à
+     * se demander, à chaque entrée examinée, si le clic était sur le bouton.
+     */
+    if (cible.closest(`[data-sujets-menu="${LE_MENU_DU_TRI}"]`)) {
+      basculerUnMenuDenTete(hote, LE_MENU_DU_TRI);
+      return;
+    }
+
+    const ordre = cible.closest(`[${TRIER_LES_DOCUMENTS}]`);
+    if (ordre) {
+      etat.tri = texte(ordre.getAttribute(TRIER_LES_DOCUMENTS));
+      // Le menu se referme avec le redessin : il vit dans le HTML réécrit.
+      redessiner(hote);
+      return;
+    }
+
+    /**
+     * **Tout exporter.**
+     *
+     * Rien ne part sur le réseau : `downloadJsonFile` écrit le fichier sur le
+     * disque de celui qui a cliqué. Et il n'y a pas de redessin — l'écran n'a
+     * pas changé, seul un fichier est apparu.
+     */
+    if (cible.closest(`[${TOUT_EXPORTER}]`)) {
+      // **Le chantier se demande, il n'est pas dans l'état.** Cet écran ne le
+      // garde pas ; `projetCourant()` est la façon dont tout le reste du module
+      // le lit, et une copie dans l'état aurait vieilli au changement de projet.
+      void projetCourant().then((projectId) => downloadJsonFile({
+        filename: leNomDeLexportDesAnalyses(),
+        data: lexportDesAnalyses({
+          documents: lesDocumentsDeLaVue(etat),
+          analyses: lesAnalysesDeLaVue(etat),
+          projet: texte(projectId),
+          famille: etat.famille,
+          filtre: texte(etat.filtre)
+        })
+      }));
       return;
     }
 
