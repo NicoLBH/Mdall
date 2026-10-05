@@ -191,7 +191,21 @@ export function blocsDeLaProposition(lignes = [], { ouEcrit = null, auteurs = nu
       nature: texte(ligne?.porteur?.nature) || texte(ligne?.porteur?.payload?.nature),
       regle: false,
       lit: [],
-      produit: []
+      produit: [],
+      /**
+       * **La valeur que le document en dit, et l'affirmation entière.**
+       *
+       * Les deux servent aux *preuves du code* : la valeur est l'attendu d'un
+       * cas, et l'affirmation est ce que `evaluerLaRegle` rejoue. Rejouer
+       * depuis les lignes rendues serait impossible — elles sont du texte
+       * colorisé — et recopier le corps de la règle dans le bloc en ferait une
+       * seconde source, qui vieillirait (règle 4).
+       *
+       * `null` sur un bloc sans code, comme les quatre champs du cran : une
+       * seule forme de bloc, pour que l'écran n'ait pas à tester laquelle il a.
+       */
+      valeur: "",
+      affirmation: null
     };
 
     // **Un retrait n'a pas de bloc, il en retire un.** Écrire le code de ce qui
@@ -209,6 +223,8 @@ export function blocsDeLaProposition(lignes = [], { ouEcrit = null, auteurs = nu
       // porte ce test pour toute la mémoire. Un quatrième `=== true` écrit ici
       // serait la copie qu'on ne relit jamais (règle 10).
       regle: estUneRegle(affirmation),
+      valeur: texte(affirmation?.payload?.value),
+      affirmation,
       // Ce que ce bloc lit et conclut : les mêmes deux fonctions que le graphe
       // des dépendances de la mémoire. Un second calcul aurait dessiné une
       // chaîne que la Mémoire ne montre pas (règle 4).

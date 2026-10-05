@@ -31,6 +31,10 @@ import { PHRASES_SANS_BLOC, blocsAOuvrir } from "./mdall-de-la-proposition.js";
 import {
   CRAN, ceQueLaTraductionDit, leCranDit, lesBlocsParCran, lesCheminsEntreBlocs
 } from "../../services/les-crans-de-la-traduction.js";
+import {
+  CE_QUE_LES_PREUVES_NE_DISENT_PAS, PREUVE, ceQueLeDocumentDit, ceQueLesPreuvesDisent,
+  lesPreuvesDuBloc
+} from "../../services/les-preuves-du-code.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -74,10 +78,14 @@ export function renderBlocsMdall(blocs = []) {
   const ouverts = blocsAOuvrir(tous);
   const { groupes, sansCran } = lesBlocsParCran(tous);
   const chemins = lesCheminsEntreBlocs(tous);
+  // **Ce que le document dit, calculé une fois pour tous les blocs.** Chaque
+  // fonction s'éprouve sur les valeurs des autres lignes du même dépôt, et les
+  // recalculer par bloc ferait N fois le même travail.
+  const dit = ceQueLeDocumentDit(tous);
 
   return `
     <p class="synthese__mot">${escapeHtml(ceQueLaTraductionDit(tous))}</p>
-    ${groupes.map((cran) => renderUnCran(cran, ouverts)).join("")}
+    ${groupes.map((cran) => renderUnCran(cran, ouverts, dit)).join("")}
     ${renderLesChemins(chemins)}
     ${sansCran.length ? renderUnCran({
       rang: 0,
@@ -91,7 +99,36 @@ export function renderBlocsMdall(blocs = []) {
       blocs: sansCran,
       estVide: false,
       vide: ""
-    }, ouverts) : ""}
+    }, ouverts, dit) : ""}
+    ${renderCeQueLesPreuvesNeDisentPas(tous, dit)}
+  `;
+}
+
+/**
+ * Ce que ces preuves ne prouvent pas — **une fois, et seulement s'il y en a.**
+ *
+ * En bas du panneau et non sous chaque fonction : répété dix fois, on cesse de
+ * le lire, et c'est précisément le paragraphe qu'il faut avoir lu. Absent quand
+ * aucune fonction n'a été éprouvée, parce qu'il parlerait alors de rien.
+ *
+ * Le premier non-dit est le plus désagréable, et il est en premier : une
+ * fonction fausse recopiée fidèlement d'un document faux passe tous ces cas.
+ */
+function renderCeQueLesPreuvesNeDisentPas(blocs, dit) {
+  const eprouvee = blocs.some((bloc) =>
+    !bloc.sansBloc && lesPreuvesDuBloc(bloc, { dit }).cas.length);
+  if (!eprouvee) return "";
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce que ces essais ne prouvent pas</h3>
+      ${CE_QUE_LES_PREUVES_NE_DISENT_PAS.map((un) => `
+        <div class="forme-suite">
+          <h4 class="forme-suite__titre">${escapeHtml(un.quoi)}</h4>
+          <p class="conso-usages__mot">${escapeHtml(un.pourquoi)}</p>
+        </div>
+      `).join("")}
+    </section>
   `;
 }
 
@@ -111,7 +148,7 @@ export function renderBlocsMdall(blocs = []) {
  * comprendre sans savoir ce qu'on regardait. Ce qui vient en bas est `dou`, qui
  * explique le cran et n'est pas nécessaire pour lire le code.
  */
-function renderUnCran(cran, ouverts) {
+function renderUnCran(cran, ouverts, dit) {
   return `
     <section class="forme-suite">
       <h4 class="forme-suite__titre">${cran.rang ? `${cran.rang}. ` : ""}${
@@ -121,14 +158,14 @@ function renderUnCran(cran, ouverts) {
       <p class="conso-usages__mot">${escapeHtml(cran.question)}</p>
       ${cran.estVide
         ? `<p class="review-empty-note">${escapeHtml(cran.vide)}</p>`
-        : `<div class="mdall-blocs">${cran.blocs.map((bloc) => renderUnBloc(bloc, ouverts))
+        : `<div class="mdall-blocs">${cran.blocs.map((bloc) => renderUnBloc(bloc, ouverts, dit))
             .join("")}</div>`}
       <p class="conso-usages__mot">${escapeHtml(cran.dou)}</p>
     </section>
   `;
 }
 
-function renderUnBloc(bloc, ouverts) {
+function renderUnBloc(bloc, ouverts, dit) {
   return `
     <details class="mdall-bloc"${ouverts.has(bloc.cle) ? " open" : ""}>
       <summary class="mdall-bloc__tete">
@@ -140,9 +177,106 @@ function renderUnBloc(bloc, ouverts) {
           ? `<p class="review-empty-note">${escapeHtml(PHRASES_SANS_BLOC[bloc.sansBloc] ?? "")}</p>`
           : renderLignesDeCode(bloc.lignes)
       }
+      ${bloc.sansBloc ? "" : renderLesPreuves(bloc, dit)}
     </details>
   `;
 }
+
+/**
+ * Les preuves d'une fonction, **sous son code et dans le même bloc.**
+ *
+ * > « Voici le code ET voici les tests que nous avons réalisés sur le code…
+ * >   vous pouvez signer, tout est bien fait. »
+ *
+ * Sous le code, parce que c'est l'ordre de la phrase : on lit la fonction, puis
+ * ce qu'elle a rendu. Dans le même `<details>`, parce qu'une liste de cas posée
+ * ailleurs demanderait de retrouver de quelle fonction elle parle.
+ *
+ * Elles ne s'affichent que pour une fonction : une valeur n'a rien à rejouer, et
+ * une section vide sous chaque valeur ferait chercher ce qui manque (règle 5).
+ */
+function renderLesPreuves(bloc, dit) {
+  const { cas, assiette, pourquoiRien } = lesPreuvesDuBloc(bloc, { dit });
+
+  if (pourquoiRien) {
+    return `<p class="review-empty-note">${escapeHtml(pourquoiRien)}</p>`;
+  }
+  if (!cas.length) return "";
+
+  return `
+    <section class="forme-suite">
+      <h4 class="forme-suite__titre">Ce que nous avons essayé</h4>
+      <p class="conso-usages__mot">${escapeHtml(ceQueLesPreuvesDisent(assiette))}</p>
+      <ul class="forme-reference">
+        ${cas.map(renderUnCas).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
+ * Un cas : ce qu'on a donné, ce que la fonction a rendu, et le verdict.
+ *
+ * **Un seuil se rend autrement**, parce qu'il dit autre chose : deux côtés, ce
+ * qui se passe de part et d'autre, et la question posée au lecteur. Le forcer
+ * dans la forme d'un cas jugé lui donnerait une marque de réussite qu'il n'a pas.
+ */
+function renderUnCas(un) {
+  if (un.verdict === PREUVE.MONTRE && Array.isArray(un.cotes)) {
+    return `
+      <li class="forme-reference__ligne">
+        <span class="forme-reference__quoi">
+          <b>${escapeHtml(un.seuil)}</b>
+          <i>${escapeHtml(un.question)}</i>
+        </span>
+        <span class="forme-reference__chiffres mono-small">${un.cotes.map((cote) => `
+          ${escapeHtml(cote.essaye)} → ${escapeHtml(cote.rendu)}
+        `).join("<br>")}</span>
+        <span class="forme-reference__sur">${escapeHtml(
+          un.bascule ? "bascule ici" : "ne décide pas seul")}</span>
+      </li>
+    `;
+  }
+
+  return `
+    <li class="forme-reference__ligne">
+      <span class="forme-reference__quoi">
+        <b>${escapeHtml(un.dit)}</b>
+        <i>${escapeHtml(lesEntreesDites(un))}</i>
+      </span>
+      <span class="forme-reference__chiffres mono-small">${escapeHtml(
+        un.rendu || "rien")}</span>
+      <span class="forme-reference__sur">${escapeHtml(LA_MARQUE_DU_VERDICT[un.verdict] ?? "")}</span>
+    </li>
+  `;
+}
+
+/**
+ * Ce qu'on a donné à la fonction, nommément.
+ *
+ * **Sans les entrées, un écart ne se diagnostique pas** : « la fonction rend
+ * autre chose » envoie chercher, et ce qu'on cherche est ce qu'elle a lu.
+ */
+function lesEntreesDites(un) {
+  if (un.verdict === PREUVE.INDECIDABLE && un.manquants?.length) {
+    // Les noms qui manquent, et non « indécidable » tout court.
+    return `il manque : ${un.manquants.join(", ")}`;
+  }
+
+  const entrees = Array.isArray(un.entrees) ? un.entrees : [];
+  if (!entrees.length) return "aucune entrée lue";
+
+  const avec = entrees.map((une) => `${une.sujet} = ${une.valeur}`).join(" · ");
+  return un.attendu ? `${avec} — le document conclut « ${un.attendu} »` : avec;
+}
+
+/** La marque d'un verdict. Un écart se lit au premier coup d'œil. */
+const LA_MARQUE_DU_VERDICT = {
+  [PREUVE.CONFORME]: "conforme",
+  [PREUVE.ECART]: "écart",
+  [PREUVE.INDECIDABLE]: "indécidable",
+  [PREUVE.MONTRE]: "montre"
+};
 
 /**
  * Le quatrième cran : **les chemins entre fonctions, en liste.**

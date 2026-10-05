@@ -188,7 +188,8 @@ test("sans objet à écrire, on ne fabrique pas de bloc", () => {
    */
   assert.deepEqual(blocsDeLaProposition([{ cle: "x", sujet: "X", changement: "nouveau" }]), [{
     cle: "x", sujet: "X", changement: "nouveau", fichier: "", lignes: [],
-    sansBloc: SANS_BLOC.RIEN, nature: "", regle: false, lit: [], produit: []
+    sansBloc: SANS_BLOC.RIEN, nature: "", regle: false, lit: [], produit: [],
+    valeur: "", affirmation: null
   }]);
   assert.deepEqual(blocsDeLaProposition(null), []);
 });
@@ -219,6 +220,13 @@ test("un bloc porte sa nature, sa qualité de règle, et ce qu'il relie", () => 
   assert.equal(regle.regle, true, "`estUneRegle` ne voit plus la règle : le cran la rangerait en donnée");
   assert.deepEqual(regle.lit, ["Famille du bâtiment"]);
   assert.deepEqual(regle.produit, ["Degré coupe-feu"]);
+
+  // **L'affirmation entière voyage avec le bloc**, et c'est elle que les
+  // preuves du code rejouent. Sans elle il faudrait recopier le corps de la
+  // règle dans le bloc, c'est-à-dire en faire une seconde source.
+  assert.equal(valeur.valeur, "890 m");
+  assert.equal(regle.valeur, "CF 1 h");
+  assert.equal(regle.affirmation?.payload?.regle?.conditions?.length, 1);
 });
 
 /* ── Où le bloc ira, et ce qu'on ouvre tout seul ─────────────────────────── */

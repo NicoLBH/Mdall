@@ -38,6 +38,10 @@ import {
   CE_QUE_LE_RAPPORT_APPORTE, LA_VIE_DUN_AVIS, phraseDeLaSuite
 } from "../../services/le-devenir-dun-avis.js";
 import { renderLidentiteDunDocument } from "./lidentite-dun-document.js";
+import { avisDuRapport } from "../../services/avis-versement.js";
+import { blocsAProposer } from "./mdall-de-la-proposition.js";
+import { SOUS_LE_TITRE, renderMdallAProposer } from "./mdall-a-proposer.js";
+import { renderLesPreuvesDeLaLecture } from "./les-preuves-de-la-lecture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -521,11 +525,63 @@ export function renderLeDetailDunRapport(vue = null, { onglet = "analyse" } = {}
     `;
   }
 
+  /**
+   * **Ce qu'un rapport se transcrit, et pourquoi il l'a si longtemps caché.**
+   *
+   * Le rapport n'avait aucune transcription visible : deux onglets, et le
+   * commentaire disait pourquoi — « un rapport de contrôle ne relève pas
+   * d'idées ». C'est vrai de ses *idées*, et faux de ses *avis* : un avis est un
+   * constat, et un constat s'écrit en Mdall. On lisait donc un tableau d'avis
+   * sans jamais voir ce que la mémoire en ferait, dans le seul écran où ça
+   * compte — celui d'avant la proposition
+   * (`docs/montrer-le-raisonnement.md`, D3).
+   *
+   * `avisDuRapport` fait déjà la transcription : c'est elle que la proposition
+   * emploie, et c'est donc exactement ce qui serait versé — pas une
+   * approximation (règle 4).
+   *
+   * **Sans la mémoire du projet**, et c'est assumé : `assertions` ne sert qu'à
+   * proposer la liaison — sur quelles lignes l'avis porte —, et la liaison
+   * n'entre pas dans le Mdall d'un constat. L'écran n'a donc pas besoin de la
+   * charger pour montrer ce qu'il montre.
+   */
+  if (onglet === "mdall") {
+    const { versables } = avisDuRapport({
+      avis: liste(lecture.avis),
+      assertions: [],
+      emisPar: texte(lecture?.emisPar) || texte(lecture?.emetteur?.nom),
+      rapport: texte(lecture?.nom) || texte(lecture?.titre),
+      documentId: texte(vue?.conservee?.documentId),
+      le: texte(lecture?.le)
+    });
+
+    const blocs = blocsAProposer(versables, {});
+    if (!blocs.length) {
+      return `<p class="review-empty-note">${escapeHtml(
+        "Ce rapport n'a produit aucun avis transcriptible : il n'y a rien que la "
+        + "mémoire écrirait. Ce n'est pas « le rapport est vide » — l'onglet "
+        + "Analyse dit ce qui a été relevé, et ce que la porte a jeté."
+      )}</p>`;
+    }
+
+    return `<div class="rapport-detail">${renderMdallAProposer(blocs, {
+      titre: "Ce que nous avons compris de ce rapport",
+      quoi: SOUS_LE_TITRE.A_PROPOSER
+    })}</div>`;
+  }
+
   return `
     <div class="rapport-detail">
       ${renderCeQuiACoince(lecture)}
       ${renderLaLegendeLue(lecture)}
       ${renderLesAvisReleves(lecture)}
+      ${/*
+        **Ce qu'on a vérifié, après ce qu'on a relevé.** Avant, la liste des
+        contrôles se lirait sans savoir sur quoi ils portent ; tout en bas, on ne
+        l'atteindrait pas. Elle vient donc juste après les avis, qui sont ce
+        qu'elle vérifie.
+      */""}
+      ${renderLesPreuvesDeLaLecture(lecture)}
       ${/*
         **Ce que chaque avis est devenu, après les avis de ce rapport-ci.** On
         vient d'abord voir ce que ce rapport dit ; on regarde ensuite ce qu'il

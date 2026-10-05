@@ -24,33 +24,57 @@
  * invariants sur toutes les lectures — une épreuve qui crie toujours
  * n'apprend rien. On normalise donc ces trois-là, **et rien d'autre** : ni la
  * casse, ni les accents, ni la ponctuation, qui portent du sens.
+ *
+ * ## Les deux contrôles ne vivent plus ici : ils sont au produit
+ *
+ * `services/les-preuves-dune-lecture.js` les tient, parce que **l'écran les
+ * montre aussi** : « ce document a-t-il été bien lu » est une question de
+ * l'utilisateur, posée à chaque lecture, et plus seulement une mesure de
+ * laboratoire.
+ *
+ * Deux écritures de « cette citation figure-t-elle dans le document » auraient
+ * fini par ne plus répondre la même chose, et l'écran aurait dit vert là où la
+ * mesure disait rouge (règle 4) — sur l'indicateur que le produit met en avant.
+ *
+ * Ce module reste donc, et il garde ce qui lui appartient : **l'adaptation de
+ * l'empreinte**. L'empreinte est la forme de la mesure, pas celle du produit ;
+ * la faire connaître au service du produit l'aurait fait dépendre de l'outil qui
+ * le mesure.
  */
+
+import {
+  lesCitationsSeRetrouvent as citationsDuProduit,
+  lesMarquesSontDeclarees as marquesDuProduit,
+  pourChercherUneCitation
+} from "../../apps/web/js/services/les-preuves-dune-lecture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
-const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
 
 /**
- * Ce qu'on met de côté avant de chercher une citation dans un document.
+ * La normalisation, **ré-exportée et non recopiée**.
  *
- * **Trois normalisations, nommées une par une.** Une liste qu'on allonge sans y
- * penser finit par rendre vraie n'importe quelle citation.
+ * Les épreuves de la batterie s'en servent pour fabriquer un document où une
+ * citation se retrouve. Une seconde copie ici répondrait un jour autrement que
+ * celle du produit, et la batterie mesurerait sa propre normalisation.
  */
-export function pourChercherUneCitation(valeur = "") {
-  return String(valeur ?? "")
-    // les apostrophes typographiques et droites sont la même apostrophe
-    .replace(/[‘’ʼ]/g, "'")
-    // les tirets longs, demi-cadratins et insécables sont le même tiret
-    .replace(/[‐-―−]/g, "-")
-    // toute suite d'espaces, de tabulations et de retours vaut un espace
-    .replace(/\s+/g, " ")
-    .trim();
-}
+export { pourChercherUneCitation };
 
 /** Les invariants que la batterie sait poser. */
 export const INVARIANT = {
   CITATION_RETROUVEE: "citation_retrouvee",
   MARQUE_DECLAREE: "marque_declaree"
 };
+
+/**
+ * Les relevés d'une empreinte, dans la forme que les contrôles attendent.
+ *
+ * C'est tout ce que ce module traduit : une `Map` de la mesure devient la liste
+ * `{cle, citation, marque}` du produit.
+ */
+function lesRelevesDeLempreinte(empreinte) {
+  return [...(empreinte?.parCle ?? new Map()).values()]
+    .map((un) => ({ cle: texte(un?.cle), citation: un?.citation, marque: un?.marque }));
+}
 
 /**
  * Toute citation se retrouve dans le document d'où elle sort.
@@ -65,17 +89,13 @@ export const INVARIANT = {
  * de le regarder.
  */
 export function lesCitationsSeRetrouvent(empreinte = null, document = "") {
-  const dans = pourChercherUneCitation(document);
-  const manquantes = [];
-  let citees = 0;
+  const controle = citationsDuProduit(lesRelevesDeLempreinte(empreinte), document);
+  const citees = controle.sur;
+  const manquantes = controle.manques;
 
-  for (const un of (empreinte?.parCle ?? new Map()).values()) {
-    const citation = pourChercherUneCitation(un.citation);
-    if (!citation) continue;
-    citees += 1;
-    if (!dans.includes(citation)) manquantes.push(un.cle);
-  }
-
+  // **La forme de l'invariant reste celle de la batterie.** Elle est déposée
+  // dans la console et comparée d'un passage à l'autre : la changer ferait des
+  // bilans qui ne se comparent plus à ceux d'avant (règle 6).
   return {
     quoi: INVARIANT.CITATION_RETROUVEE,
     citees,
@@ -99,8 +119,14 @@ export function lesCitationsSeRetrouvent(empreinte = null, document = "") {
  * avoir lu une légende, sans quoi la question ne se pose pas.
  */
 export function lesMarquesSontDeclarees(empreinte = null) {
-  const declarees = new Set(liste(empreinte?.legende).map((une) => texte(une)));
-  if (!declarees.size) {
+  const legende = Array.isArray(empreinte?.legende) ? empreinte.legende : [];
+  const controle = marquesDuProduit(lesRelevesDeLempreinte(empreinte), legende);
+
+  // **La légende se teste ici, et non dans la phrase du contrôle.** Chercher
+  // « légende » dans `sansObjet` marchait, et aurait cessé de marcher à la
+  // première reformulation — sans que rien ne tombe, en rendant simplement un
+  // invariant qui ne se pose plus.
+  if (!legende.filter(Boolean).length) {
     return {
       quoi: INVARIANT.MARQUE_DECLAREE,
       employees: 0,
@@ -110,14 +136,8 @@ export function lesMarquesSontDeclarees(empreinte = null) {
     };
   }
 
-  const sansSens = [];
-  let employees = 0;
-  for (const un of (empreinte?.parCle ?? new Map()).values()) {
-    const marque = texte(un.marque);
-    if (!marque) continue;
-    employees += 1;
-    if (!declarees.has(marque)) sansSens.push(`${un.cle} → « ${marque} »`);
-  }
+  const employees = controle.sur;
+  const sansSens = controle.manques;
 
   return {
     quoi: INVARIANT.MARQUE_DECLAREE,

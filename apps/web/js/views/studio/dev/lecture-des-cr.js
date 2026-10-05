@@ -87,6 +87,7 @@ import {
 import { renderLidentiteDunDocument } from "../../ui/lidentite-dun-document.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../../ui/project-rail.js";
 import { renderLaSyntheseDunDocument } from "../../ui/la-synthese.js";
+import { renderLesPreuvesDeLaLecture } from "../../ui/les-preuves-de-la-lecture.js";
 import {
   DIT_DE_LA_RELUE, DIT_SANS_RELUE, laRestitutionRelue
 } from "../../../services/la-restitution-relue.js";
@@ -186,7 +187,17 @@ const estUnDocumentAccepte = (nom) => EST_UN_PDF.test(texte(nom)) || estUnFichie
  * avoir vu le document dont ils sortent, c'est ce qu'on faisait avant, et c'est
  * ce qui rendait les déceptions inexplicables.
  */
-const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse", SYNTHESE: "synthese" };
+const ONGLET = {
+  RESTITUTION: "restitution", ANALYSE: "analyse", SYNTHESE: "synthese",
+  /**
+   * **Ce que la mémoire écrirait, pour un rapport de contrôle.**
+   *
+   * Il n'a pas de *Synthèse* : il ne relève pas d'idées, et un onglet qui
+   * montrerait sous ce nom autre chose que chez le compte rendu ferait douter
+   * qu'il s'agisse du même écran. Il a donc le sien, et il porte son nom.
+   */
+  MDALL: "mdall"
+};
 
 /**
  * La version du procédé de lecture d'un compte rendu.
@@ -247,7 +258,15 @@ const NOMS_DES_ONGLETS = {
    * À droite, parce qu'elle se lit après : on ne juge pas un enchaînement sans
    * avoir vu les points dont il sort.
    */
-  [ONGLET.SYNTHESE]: "Synthèse"
+  [ONGLET.SYNTHESE]: "Synthèse",
+  /**
+   * **Le mot de l'écran, et non celui du code.**
+   *
+   * « Mdall » nomme le langage et ne dit pas ce qu'on va voir. Celui qui ouvre
+   * cet onglet cherche à savoir ce que le système a compris de son rapport,
+   * et c'est ce que le libellé dit.
+   */
+  [ONGLET.MDALL]: "Ce que nous avons compris"
 };
 
 /**
@@ -1027,22 +1046,32 @@ function renderUnDocumentDuneAutreFamille(vue) {
  * est ce qu'on y met, et c'est bien ce qui doit changer : un compte rendu a des
  * points rapprochés des sujets, un rapport a des avis et une légende.
  *
- * ## La Synthèse n'est pas offerte
+ * ## La Synthèse n'est pas offerte, mais la transcription l'est
  *
  * Un rapport de contrôle ne relève pas d'idées : son analyse gelée n'en porte
- * pas. Un onglet vide ferait chercher ce qui manque (règle 5) ; les deux qu'il a
- * sont ceux qu'il remplit.
+ * pas, et un onglet *Synthèse* vide ferait chercher ce qui manque (règle 5).
+ *
+ * **Il se transcrit pourtant.** Ses avis sont des constats, et un constat
+ * s'écrit en Mdall : on lisait donc un tableau d'avis sans jamais voir ce que
+ * la mémoire en ferait, dans le seul écran où ça compte — celui d'avant la
+ * proposition. Il a donc un troisième onglet, et il ne s'appelle pas
+ * « Synthèse » : montrer sous ce nom autre chose que chez le compte rendu
+ * ferait douter qu'il s'agisse du même écran.
  */
 function renderLeDetailDunRapportDansSaCoquille(vue, ouvert) {
   const laVue = ouvert?.vue ?? null;
   if (!laVue?.lecture) return renderLeDetailDunRapport(laVue);
 
-  const ici = vue.onglet === ONGLET.RESTITUTION ? ONGLET.RESTITUTION : ONGLET.ANALYSE;
+  const LES_SIENS = [ONGLET.RESTITUTION, ONGLET.ANALYSE, ONGLET.MDALL];
+  // **Un onglet qu'il n'a pas ramène à l'Analyse**, et non à un écran vide :
+  // on arrive ici en gardant l'onglet d'un compte rendu, dont la Synthèse
+  // n'existe pas pour un rapport.
+  const ici = LES_SIENS.includes(vue.onglet) ? vue.onglet : ONGLET.ANALYSE;
 
   return `
     ${renderLidentiteDunRapport(laVue, { analyseLe: texte(ouvert?.lueLe) })}
     <nav class="light-tabs lecture-cr__onglets" aria-label="Ce que la lecture a produit">
-      ${[ONGLET.RESTITUTION, ONGLET.ANALYSE].map((cle) => `
+      ${LES_SIENS.map((cle) => `
         <button type="button" class="light-tabs__item${ici === cle ? " is-active" : ""}"
           data-lecture-cr-onglet="${escapeHtml(cle)}" aria-pressed="${ici === cle}">
           <span class="light-tabs__label">${escapeHtml(NOMS_DES_ONGLETS[cle])}</span>
@@ -1641,6 +1670,12 @@ function renderAnalyse(vue) {
     ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes, vue.suivi ?? null)}
     ${renderAmbiguites(vue.lecture.points)}
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels, vue)}
+    ${/*
+      **Le même composant que le rapport**, et la même place : après ce qu'on a
+      relevé, avant ce que le dépôt apportera. Deux listes de contrôles
+      divergeraient de forme, puis de contenu (règle 4).
+    */""}
+    ${renderLesPreuvesDeLaLecture(vue.lecture)}
     ${renderCeQueLeCrApporte(vue)}
     ${renderRubriques(vue)}
     ${
