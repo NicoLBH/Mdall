@@ -15,7 +15,7 @@
  * s'injecte par le même paramètre.
  */
 
-import { lesCellules, lesLignesDeTableau } from "./les-perturbations.js";
+import { lesCellules, lesLignesDeTableau } from "../../apps/web/js/services/les-perturbations.js";
 import { FAMILLE } from "../../apps/web/js/services/les-familles-de-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();

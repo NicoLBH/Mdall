@@ -84,18 +84,20 @@ export const CE_QUE_LOUTIL_DEMANDE = {
   },
   perturbations: {
     lit: false,
-    relit: 14,
-    leServeurSert: false,
-    coute: "Quatorze lectures, à trois appels chacune — une quarantaine "
-      + "d'appels au modèle, et plusieurs minutes.",
+    relit: 12,
+    leServeurSert: true,
+    coute: "Douze lectures, à trois appels chacune — trente-six appels au "
+      + "modèle, et plusieurs minutes. Elle avance par morceaux : vous pouvez "
+      + "fermer cette page.",
     rend: "Si la lecture suit vraiment le document : un relevé déplacé doit "
       + "suivre, une ligne retirée doit disparaître."
   },
   jeu_de_reference: {
     lit: false,
     relit: 2,
-    leServeurSert: false,
-    coute: "Deux lectures, à trois appels chacune — six appels au modèle.",
+    leServeurSert: true,
+    coute: "Deux lectures, à trois appels chacune — six appels au modèle. Elle "
+      + "avance par morceaux : vous pouvez fermer cette page.",
     rend: "Ce qui manque et ce qui est inventé, séparément, sur des documents "
       + "dont on connaît déjà la réponse."
   }
@@ -111,12 +113,18 @@ export function ceQueLoutilDemande(outil) {
  *
  * **Une phrase, et non un bouton éteint sans raison.** Un bouton gris dont on ne
  * sait pas pourquoi il est gris se lit comme une panne, et l'on recharge la page.
+ *
+ * **Les quatre se lancent aujourd'hui.** Cette phrase reste parce que le champ
+ * qu'elle sert, `leServeurSert`, est la seule chose qui empêche l'écran de
+ * proposer une mesure que rien ne viendrait prendre — et une file qu'aucune
+ * fonction ne vide reste en attente pour toujours en se lisant « ça tourne »
+ * (règle 12). Le jour où l'on ajoute un cinquième outil, c'est ici qu'il dira
+ * s'il est servi.
  */
 export const PAS_ENCORE_SERVI =
-  "Cet outil relit des documents de démonstration qui ne sont pas encore montés "
-  + "au serveur : il ne se lance donc pas depuis cette page. Les deux outils qui "
-  + "lisent vos lectures conservées, eux, se lancent — et ce sont ceux qui "
-  + "mesurent votre chantier.";
+  "Cet outil n'est pas encore servi par le serveur : il ne se lance donc pas "
+  + "depuis cette page, plutôt que de poser une demande que rien ne viendrait "
+  + "prendre.";
 
 export function pourquoiPasDici(outil) {
   const ce = ceQueLoutilDemande(outil);

@@ -65,6 +65,18 @@ const vers = path.join(racine, "supabase", "functions", "_shared", "versement");
  * fichier dans le même déploiement finissent par ne plus être les mêmes.
  */
 export const LES_DEPARTS = [
+  // Faire passer la batterie de perturbations et le jeu de référence depuis la
+  // console. Leurs cœurs vivent dans les services depuis qu'ils servent aux deux
+  // côtés ; leur **corpus**, lui, est fait de fichiers, et un fichier ne
+  // s'importe pas : `leCorpusDescendu()` l'emporte en module, plus bas.
+  "services/les-morceaux-dune-mesure.js",
+  // Ce qu'une annotation doit déclarer, et ce qu'on refuse. `passer-le-jeu.js`
+  // ne l'importe plus — il reçoit ses annotations —, mais la fonction de bord
+  // en a besoin pour mettre en forme celles qui descendent avec le corpus.
+  "services/lannotation.js",
+  "services/passer-la-batterie.js",
+  "services/passer-le-jeu.js",
+  "services/un-lecteur-du-serveur.js",
   // Mesurer la justesse depuis la console : la dérive des analyses conservées,
   // et la réduction d'un bilan à des nombres — la serrure qui empêche un contenu
   // de chantier d'entrer dans la console. Les cœurs de mesure vivent dans les
@@ -220,6 +232,60 @@ export function lesNomsQuiSeHeurtent(modules = []) {
   return [...par.values()].filter((siens) => siens.length > 1).map((siens) => siens.join(" et "));
 }
 
+/**
+ * Le corpus de mesure, emporté **en module**.
+ *
+ * ## Pourquoi il ne peut pas rester un dossier de fichiers
+ *
+ * La batterie de perturbations et le jeu de référence tournent sur deux
+ * documents écrits à la main, et deux annotations qui disent ce qu'on en attend.
+ * En ligne de commande, les outils les lisent du disque — c'est la forme la plus
+ * lisible pour les écrire et les relire.
+ *
+ * Deno n'a pas ce dossier. Sans cette descente, les deux outils ne pouvaient
+ * **pas** se lancer depuis la console : leur corpus n'y existait pas.
+ *
+ * ## Pourquoi on les génère, et qu'on ne les recopie pas à la main
+ *
+ * Un corpus recopié aurait divergé au premier document ajouté — et la mesure
+ * aurait porté sur un corpus différent de celui qu'on croit, sans que rien ne le
+ * dise. La source de vérité reste le dossier ; le module est fabriqué à chaque
+ * construction, à partir de lui.
+ */
+async function leCorpusDescendu() {
+  const ouEstLeCorpus = path.join(racine, "scripts", "la-batterie-des-perturbations", "le-corpus");
+  const ouSontLesAnnotations = path.join(racine, "scripts", "le-jeu-de-reference", "les-annotations");
+
+  const documents = [];
+  for (const nom of (await readdir(ouEstLeCorpus)).filter((un) => un.endsWith(".md")).sort()) {
+    documents.push({ nom, contenu: await readFile(path.join(ouEstLeCorpus, nom), "utf8") });
+  }
+
+  const annotations = [];
+  for (const nom of (await readdir(ouSontLesAnnotations)).filter((un) => un.endsWith(".json")).sort()) {
+    annotations.push({
+      nom,
+      brute: JSON.parse(await readFile(path.join(ouSontLesAnnotations, nom), "utf8"))
+    });
+  }
+
+  return `/**
+ * Le corpus de mesure, descendu au serveur.
+ *
+ * **Fabriqué par \`scripts/prepare-versement.mjs\`.** Ne pas le modifier à la
+ * main : la source est \`scripts/la-batterie-des-perturbations/le-corpus/\` et
+ * \`scripts/le-jeu-de-reference/les-annotations/\`, et cette copie est refaite à
+ * chaque construction.
+ */
+
+/** Les documents de la batterie, tels que le dossier les porte. */
+export const LE_CORPUS_DESCENDU = ${JSON.stringify(documents, null, 2)};
+
+/** Les annotations du jeu de référence, telles que le dossier les porte. */
+export const LES_ANNOTATIONS_DESCENDUES = ${JSON.stringify(annotations, null, 2)};
+`;
+}
+
 async function principal() {
   await rm(vers, { recursive: true, force: true });
   await mkdir(vers, { recursive: true });
@@ -246,6 +312,10 @@ async function principal() {
 
     await writeFile(path.join(vers, path.basename(module)), leModuleAplati(source), "utf8");
   }
+
+  // **Le corpus de mesure**, qui est fait de fichiers et non de modules : sans
+  // lui, la batterie et le jeu de référence ne peuvent pas se lancer au serveur.
+  await writeFile(path.join(vers, "le-corpus-descendu.js"), await leCorpusDescendu(), "utf8");
 
   const poses = (await readdir(vers)).length;
   console.log(`versement: ${poses} modules descendus vers _shared/versement`);

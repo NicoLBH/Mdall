@@ -33,17 +33,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { LES_FAMILLES_PROJETEES } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
+import { laFamilleDeclaree } from "../../apps/web/js/services/les-morceaux-dune-mesure.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 export const OU_EST_LE_CORPUS = join(ICI, "le-corpus");
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** La famille qu'un document déclare en tête, ou `""`. */
-export function laFamilleDeclaree(doc = "") {
-  const dit = String(doc ?? "").match(/<!--\s*famille:\s*([a-z_]+)\s*-->/i);
-  return texte(dit?.[1]);
-}
+// **La famille déclarée se lit dans les services**, parce que le serveur lit le
+// même corpus, descendu en module. Deux lectures du même commentaire se
+// seraient séparées au premier format accepté (règle 10).
+export { laFamilleDeclaree };
 
 /**
  * Le corpus, lu du disque.

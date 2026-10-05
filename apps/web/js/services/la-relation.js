@@ -22,8 +22,8 @@
 const texte = (valeur) => String(valeur ?? "").trim();
 
 import { RELATION } from "./les-perturbations.js";
-import { combienDeReleves } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
-import { ceQuiSepare } from "../../apps/web/js/services/ce-qui-separe.js";
+import { combienDeReleves } from "./lempreinte-dune-lecture.js";
+import { ceQuiSepare } from "./ce-qui-separe.js";
 
 /** Ce qu'une épreuve rend. */
 export const VERDICT = {

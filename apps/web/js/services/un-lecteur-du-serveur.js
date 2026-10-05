@@ -27,9 +27,9 @@
  * même découpage que la perturbation « une coupure de page » vient déranger.
  */
 
-import { lireUnRapport } from "../../apps/web/js/services/lire-un-rapport.js";
-import { FAMILLE } from "../../apps/web/js/services/les-familles-de-document.js";
-import { LA_COUPURE } from "../la-batterie-des-perturbations/les-perturbations.js";
+import { lireUnRapport } from "./lire-un-rapport.js";
+import { FAMILLE } from "./les-familles-de-document.js";
+import { LA_COUPURE } from "./les-perturbations.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 

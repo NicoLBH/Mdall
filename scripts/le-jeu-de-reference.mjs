@@ -21,16 +21,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { ETAPE } from "./le-jeu-de-reference/la-confrontation.js";
-import { leJeuDeReference } from "./le-jeu-de-reference/lannotation.js";
-import { passerLeJeu } from "./le-jeu-de-reference/passer-le-jeu.js";
+import { ETAPE } from "../apps/web/js/services/la-confrontation.js";
+import { leJeuDeReference } from "./le-jeu-de-reference/le-jeu-du-disque.js";
+import { passerLeJeu } from "../apps/web/js/services/passer-le-jeu.js";
 import { OU_EST_LE_CORPUS } from "./la-batterie-des-perturbations/le-corpus.js";
 import {
   unLecteurFidele, unLecteurQuiDevine
 } from "./la-batterie-des-perturbations/un-lecteur-de-carton.js";
 import {
   parLeReseau, unLecteurDuServeur
-} from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
+} from "../apps/web/js/services/un-lecteur-du-serveur.js";
 import {
   MESURE, deposerUnBilan, direLeDepot, ouDeposer
 } from "../apps/web/js/services/le-depot-dun-bilan.js";

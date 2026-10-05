@@ -410,3 +410,89 @@ test("un avis du suivi fait tomber sa couverture quand la variante change la val
   assert.equal(tombees[0].examinee.id, "neige");
   assert.equal(tombees[0].deviendrait, "E");
 });
+
+/* ── Un avis d'une lecture conservée traverse le versement ────────────────── */
+
+/**
+ * **Le défaut qu'on ferme, et il était invisible.**
+ *
+ * Dans l'onglet Analyse, cet avis se lit :
+ *
+ *     245 — Conformité des installations aux normes les concernant
+ *     page 8
+ *     Les notices techniques et attestations de conformité à la norme
+ *     NF EN 60-598 des luminaires sont à nous transmettre.
+ *
+ * Dans le bloc Mdall du **même écran**, sur le **même avis**, il se lisait :
+ *
+ *     Avis de contrôle technique n° 245 = "sans teneur lisible"
+ *
+ * Rien n'avait été perdu à la lecture : `unAvisReleve` range un avis sous les
+ * mots du document — `intitule`, `constat`, `marque` —, et le versement allait
+ * chercher ceux du moteur de continuité — `title_raw`, `opinion_label`. Il
+ * lisait la forme que la lecture ne produit pas (règle 10).
+ *
+ * L'épreuve part donc d'un avis **tel qu'une lecture conservée le range**, et
+ * non d'une forme choisie pour qu'elle passe.
+ */
+test("un avis d'une lecture conservée garde son objet, sa teneur et sa remarque", () => {
+  const { versables, sansLeCouple } = avisDuRapport({
+    avis: [{
+      reference: "245",
+      intitule: "Conformité des installations aux normes les concernant",
+      marque: "S",
+      ou: "page 8",
+      page: 8,
+      constat: "Les notices techniques et attestations de conformité à la norme "
+        + "NF EN 60-598 des luminaires sont à nous transmettre."
+    }],
+    assertions: [],
+    emisPar: "VERIFAS",
+    rapport: "RFCT-CT-13860-0425-0216.pdf",
+    le: "2025-04-16"
+  });
+
+  assert.equal(versables.length, 1, "l'avis n'est pas proposé du tout");
+  assert.equal(sansLeCouple, 0);
+
+  const [un] = versables;
+  assert.equal(un.sujet, "Avis de contrôle technique n° 245");
+
+  // **La teneur vient de la marque**, parce que le rapport ne déclare aucune
+  // légende : un rapport final n'y relève que ce qui ne va pas.
+  assert.match(un.valeur, /suspendu/);
+  assert.doesNotMatch(un.valeur, /sans teneur lisible/);
+
+  // **Et l'objet vérifié est là** : c'est la moitié du couple sans laquelle la
+  // ligne ne dirait qu'un numéro.
+  assert.match(un.valeur, /Conformité des installations aux normes les concernant/);
+
+  // **L'autre moitié aussi** : la remarque dit ce qui ne va pas, et c'est elle
+  // qui rend la donnée actionnable.
+  assert.match(un.remarque, /NF EN 60-598/);
+});
+
+/**
+ * **Et celui qui ne porte ni l'un ni l'autre reste dehors.**
+ *
+ * « n° 246 = sans teneur lisible, page 8 » n'est pas une donnée. Mieux vaut ne
+ * rien verser que de saturer la mémoire de bruit.
+ */
+test("un avis réduit à son numéro n'est pas proposé, et se compte", () => {
+  const { versables, sansLeCouple, ditDesAvisSansCouple } = avisDuRapport({
+    avis: [
+      { reference: "245", intitule: "Conformité des installations", marque: "S" },
+      { reference: "246", marque: "S", page: 8 },
+      { reference: "247", marque: "D", page: 9 }
+    ],
+    assertions: []
+  });
+
+  assert.equal(versables.length, 1, "un avis sans couple est entré en mémoire");
+  assert.equal(versables[0].sujet, "Avis de contrôle technique n° 245");
+
+  // Ils se comptent, et l'écran le dit : les taire ferait croire que le rapport
+  // n'en porte qu'un alors qu'il en porte trois (règle 5).
+  assert.equal(sansLeCouple, 2);
+  assert.match(ditDesAvisSansCouple, /2 avis ne sont pas proposés/);
+});

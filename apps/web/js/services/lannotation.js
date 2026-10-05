@@ -32,15 +32,21 @@
  * lecteur de passage ne le prenne pas pour un oubli.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+/**
+ * **Aucune lecture de disque ici, et c'est ce qui permet au serveur de s'en
+ * servir.**
+ *
+ * Ce module mettait en forme une annotation **et** lisait le dossier qui les
+ * porte. Deno n'a pas ce dossier : la fonction de bord qui fait passer le jeu de
+ * référence ne pouvait donc pas l'importer du tout.
+ *
+ * La mise en forme — ce qu'une annotation doit déclarer, et ce qu'on refuse —
+ * est la partie qui compte, et elle vit maintenant ici, où les deux côtés la
+ * trouvent. `scripts/le-jeu-de-reference/le-jeu-du-disque.js` garde la lecture
+ * du dossier, qui n'a de sens qu'en ligne de commande.
+ */
 
-import { LES_FAMILLES_PROJETEES } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
-import { laCleDunReleve } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
-
-const ICI = dirname(fileURLToPath(import.meta.url));
-export const OU_SONT_LES_ANNOTATIONS = join(ICI, "les-annotations");
+import { LES_FAMILLES_PROJETEES, laCleDunReleve } from "./lempreinte-dune-lecture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -110,14 +116,4 @@ export function uneAnnotation(brute = null, nom = "") {
   };
 }
 
-/**
- * Le jeu de référence, lu du disque.
- *
- * @throws si une annotation est mal formée — voir `uneAnnotation`.
- */
-export function leJeuDeReference(ou = OU_SONT_LES_ANNOTATIONS) {
-  return readdirSync(ou)
-    .filter((nom) => nom.endsWith(".json"))
-    .sort()
-    .map((nom) => uneAnnotation(JSON.parse(readFileSync(join(ou, nom), "utf8")), nom));
-}
+

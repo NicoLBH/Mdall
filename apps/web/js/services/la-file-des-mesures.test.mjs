@@ -71,32 +71,36 @@ test("le bouton d'un outil gratuit porte son prix, qui est rien", () => {
   assert.match(bouton.pourquoi, /aucun appel au modèle, aucune facture/);
 });
 
-/**
- * **Un outil que le serveur ne sert pas ne pose pas de demande.**
- *
- * C'est le défaut que la règle 12 nomme : un bouton qui pose une ligne
- * qu'aucune fonction ne vient prendre laisse la console sur « en cours » pour
- * toujours, et l'on attend un bilan qui ne viendra jamais.
- */
-test("un outil que le serveur ne sert pas est éteint, avec sa raison", () => {
-  for (const outil of ["perturbations", "jeu_de_reference"]) {
-    const bouton = cequeLeBoutonDit(outil, []);
-    assert.equal(bouton.peut, false, `${outil} se lance alors que rien ne le sert`);
-    assert.equal(bouton.pourquoi, PAS_ENCORE_SERVI);
-    assert.equal(pourquoiPasDici(outil), PAS_ENCORE_SERVI);
-  }
-
-  // Et la raison dit **pourquoi**, et ce qui marche quand même : un bouton gris
-  // sans explication se lit comme une panne, et l'on recharge la page.
-  assert.match(PAS_ENCORE_SERVI, /pas encore montés au serveur/);
-  assert.match(PAS_ENCORE_SERVI, /se lancent/);
-});
-
-test("les deux outils qui lisent les lectures conservées se lancent", () => {
-  for (const outil of ["derive", "invariants"]) {
+/** Les quatre se lancent depuis la console, et c'est ce qu'on vient de livrer. */
+test("les quatre outils se lancent depuis la console", () => {
+  for (const outil of Object.keys(CE_QUE_LOUTIL_DEMANDE)) {
     assert.equal(pourquoiPasDici(outil), "", `${outil} ne se lance pas`);
     assert.equal(cequeLeBoutonDit(outil, []).peut, true);
   }
+});
+
+/**
+ * **Et le garde reste, parce qu'il empêche le défaut que la règle 12 nomme.**
+ *
+ * Un bouton qui pose une ligne qu'aucune fonction ne vient prendre laisse la
+ * console sur « en cours » pour toujours : on attend un bilan qui ne viendra
+ * jamais. `leServeurSert` est ce qui l'interdit ; le jour où l'on ajoute un
+ * cinquième outil, c'est lui qui dira s'il est servi.
+ */
+test("un outil que le serveur ne servirait pas resterait éteint, avec sa raison", () => {
+  const faux = { ...CE_QUE_LOUTIL_DEMANDE.derive, leServeurSert: false };
+  CE_QUE_LOUTIL_DEMANDE.un_outil_pas_servi = faux;
+  try {
+    const bouton = cequeLeBoutonDit("un_outil_pas_servi", []);
+    assert.equal(bouton.peut, false, "un outil que rien ne sert se lance quand même");
+    assert.equal(bouton.pourquoi, PAS_ENCORE_SERVI);
+  } finally {
+    delete CE_QUE_LOUTIL_DEMANDE.un_outil_pas_servi;
+  }
+
+  // Et la raison dit **pourquoi** on ne propose pas, plutôt que de laisser un
+  // bouton gris sans explication — qui se lit comme une panne.
+  assert.match(PAS_ENCORE_SERVI, /que rien ne viendrait prendre/);
 });
 
 /* ── Une demande en vol ───────────────────────────────────────────────────── */
@@ -181,14 +185,20 @@ test("ce qui tourne dit qu'on peut fermer la page", () => {
  * vérifie sur les deux cas, pour qu'elle ne mente ni dans un sens ni dans
  * l'autre.
  */
-test("la page dit ce que cliquer ici coûte, et seulement ce qui se lance d'ici", () => {
+test("la page compte les lectures que cliquer ici coûterait", () => {
   const dit = ceQueLesMesuresCoutent();
-  assert.match(dit, /aucun appel au modèle, aucune facture/);
 
-  // Les deux outils qui relisent ne sont pas comptés : ils ne se lancent pas
-  // d'ici, et annoncer leur facture ferait craindre une dépense qu'on ne peut
-  // même pas déclencher.
-  assert.doesNotMatch(dit, /lectures au total/);
+  // **Les deux outils qui relisent sont comptés, maintenant qu'ils se lancent.**
+  // Taire leur facture serait la laisser découvrir après coup (fondamental 13).
+  assert.match(dit, /2 mesures/);
+  assert.match(dit, /14 lectures au total/,
+    "le compte des lectures ne suit pas ce que les outils déclarent relire");
+  assert.match(dit, /trois appels chacune/);
+
+  // Et le compte vient des outils, pas d'un nombre écrit à la main.
+  const attendu = Object.values(CE_QUE_LOUTIL_DEMANDE)
+    .filter((ce) => ce.leServeurSert).reduce((somme, ce) => somme + ce.relit, 0);
+  assert.match(dit, new RegExp(`${attendu} lectures`));
 });
 
 /* ── Les deux côtés disent la même chose ──────────────────────────────────── */

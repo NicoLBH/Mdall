@@ -44,7 +44,12 @@
 
 import { NATURE } from "./assertion-taxonomy.js";
 import { PROVENANCE, STATUT } from "./memoire-en-texte.js";
-import { LIAISON, intituleDeLAvis, liaisonsProposees } from "./avis-liaison.js";
+import { LIAISON, liaisonsProposees } from "./avis-liaison.js";
+// **Ce qu'un avis vaut, décidé à un seul endroit.** Le couple objet / remarque,
+// la teneur quand la légende se tait, et la règle qui dit quand il ne vaut rien.
+import {
+  ceQueLesAvisSansCoupleDisent, laTeneurDunAvis, leCoupleDunAvis, unAvisVautDetreVerse
+} from "./ce-quun-avis-vaut.js";
 import { emetteurDuDocument, organismeCertain } from "./emetteur-du-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -74,16 +79,27 @@ export function sujetDeLAvis(avis = null) {
   const reference = texte(avis?.value?.external_reference_raw) || texte(avis?.reference);
   if (reference) return `Avis de contrôle technique n° ${reference}`;
 
-  const intitule = intituleDeLAvis(avis);
-  return intitule ? `Avis de contrôle technique — ${intitule}` : "";
+  // **Le même couple qu'ailleurs** : `intituleDeLAvis` ne lisait que la forme du
+  // moteur, et un avis sans numéro lu depuis une analyse conservée n'avait donc
+  // aucun sujet — il n'entrait pas du tout (règle 10).
+  const { objet } = leCoupleDunAvis(avis);
+  return objet ? `Avis de contrôle technique — ${objet}` : "";
 }
 
-/** Ce que l'avis dit, tel que le rapport l'écrit. */
-function teneurDeLAvis(avis = null) {
-  return texte(avis?.opinion_label)
-    || texte(avis?.value?.opinion_raw)
-    || texte(avis?.opinion_raw)
-    || "sans teneur lisible";
+/**
+ * Ce que l'avis dit, tel que le rapport l'écrit — **ou ce que sa marque veut
+ * dire** quand il ne l'écrit pas.
+ *
+ * Elle ne cherchait que la forme du moteur de continuité — `opinion_label`,
+ * `value.opinion_raw` — et une lecture conservée range ses avis sous les mots du
+ * document : `marque`, `constat`, `intitule`. Elle rendait donc « sans teneur
+ * lisible » sur des avis parfaitement lus (règle 10).
+ *
+ * `""` quand rien ne tranche, et c'est une réponse : un rapport peut relever un
+ * point sans rendre de verdict dessus. `ce-quun-avis-vaut.js` décide.
+ */
+function teneurDeLAvis(avis = null, legende = null) {
+  return laTeneurDunAvis(avis, legende) || "sans teneur lisible";
 }
 
 /**
@@ -102,14 +118,27 @@ function teneurDeLAvis(avis = null) {
  * @param {object|null} [options.liaison] ce que `avis-liaison.js` a proposé
  */
 export function avisVersable({
-  avis = null, emisPar = "", rapport = "", documentId = "", le = "", liaison = null
+  avis = null, emisPar = "", rapport = "", documentId = "", le = "", liaison = null,
+  legende = null
 } = {}) {
   const sujet = sujetDeLAvis(avis);
   if (!sujet) return null;
 
+  /**
+   * **Un avis sans son couple ne se verse pas** (`ce-quun-avis-vaut.js`).
+   *
+   * « n° 245 = sans teneur lisible, page 8 » n'est pas une donnée : on ne peut
+   * ni le retrouver, ni le vérifier, ni savoir ce qu'il couvre. Mille lignes de
+   * ce genre ne font pas une mémoire. Mieux vaut ne rien verser.
+   *
+   * Il n'est pas perdu pour autant : il reste dans l'analyse, et l'écran compte
+   * ceux qui ne sont pas proposés.
+   */
+  if (!unAvisVautDetreVerse(avis).vaut) return null;
+
   const organisme = texte(emisPar);
-  const intitule = intituleDeLAvis(avis);
-  const teneur = teneurDeLAvis(avis);
+  const { objet: intitule, remarque } = leCoupleDunAvis(avis);
+  const teneur = teneurDeLAvis(avis, legende);
   const page = Number(avis?.provenance?.page ?? avis?.page);
 
   const numerote = Boolean(texte(avis?.value?.external_reference_raw) || texte(avis?.reference));
@@ -119,6 +148,16 @@ export function avisVersable({
     // L'intitulé ne se répète pas quand le sujet le porte déjà : « Favorable —
     // Neige » sous le sujet « Avis … — Neige » se lirait deux fois.
     valeur: intitule && numerote ? `${teneur} — ${intitule}` : teneur,
+    /**
+     * **La remarque de contrôle, portée jusqu'à la mémoire.**
+     *
+     * C'est l'autre moitié du couple, et c'est elle qui dit *ce qui ne va pas* :
+     * « Les notices techniques et attestations de conformité à la norme
+     * NF EN 60-598 des luminaires sont à nous transmettre. » Sans elle, la ligne
+     * versée dit qu'un avis existe et pas ce qu'il demande — c'est-à-dire rien
+     * d'actionnable.
+     */
+    remarque,
     quoi: "Ce qu'un bureau de contrôle a écrit d'un point du projet, dans son rapport, à sa date.",
     utilisation: "Ce qu'il a examiné cesse d'être couvert le jour où la valeur change. "
       + "C'est ce que dit une variante avant de dire ce qui se recalcule.",
@@ -188,7 +227,13 @@ export function avisVersable({
  */
 export function avisDuRapport({
   avis = [], assertions = [], emisPar = "", rapport = "", documentId = "", le = "",
-  pages = [], texte: contenu = ""
+  pages = [], texte: contenu = "",
+  /**
+   * **La légende du rapport**, qui est l'autorité sur ses propres marques. Sans
+   * elle, la teneur retombe sur le vocabulaire du métier — `S`, `D`, `NC` — qui
+   * dit la même chose partout.
+   */
+  legende = null
 } = {}) {
   const liaisons = liaisonsProposees({ avis, assertions });
 
@@ -197,12 +242,25 @@ export function avisDuRapport({
 
   const versables = liaisons
     .map((liaison) => avisVersable({
-      avis: liaison.avis, emisPar: organisme, rapport, documentId, le, liaison
+      avis: liaison.avis, emisPar: organisme, rapport, documentId, le, liaison, legende
     }))
     .filter(Boolean);
 
+  /**
+   * **Ceux qui ne valent pas d'être versés se comptent.**
+   *
+   * Les jeter en silence serait le défaut inverse de celui qu'on corrige : on
+   * croirait que le rapport porte douze avis alors qu'il en porte vingt, et l'on
+   * ne chercherait jamais les huit autres (règle 5). Ils restent dans l'analyse,
+   * et l'écran dit combien et pourquoi.
+   */
+  const sansLeCouple = liaisons.filter(
+    (liaison) => !unAvisVautDetreVerse(liaison.avis).vaut).length;
+
   return {
     versables,
+    sansLeCouple,
+    ditDesAvisSansCouple: ceQueLesAvisSansCoupleDisent(sansLeCouple),
     // Ce qui entre sans être accroché. Se dit, se compte, et ne se cache pas :
     // c'est la mesure de ce que l'extraction n'a pas su reconnaître.
     sansLiaison: versables.filter((versable) => !versable.porteSur.length).length,
