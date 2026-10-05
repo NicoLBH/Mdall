@@ -6892,6 +6892,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   font-weight:600;
   font-size:14px;
   white-space:nowrap;
+  min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
 }
@@ -10428,7 +10429,55 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
    l'en-tête porte parfois deux blocs et parfois trois — le compte, les
    pastilles, l'ordre —, et `space-between` les aurait écartés tous les trois au
    lieu de n'en détacher qu'un. */
-.data-table-shell__head-pousse{ margin-left:auto; }
+/* ── Un nom de document qui prend toute la largeur avant de se couper ────── */
+
+/* **Le navigateur coupe, et lui seul sait où.**
+
+   Un compte de caractères rendait un nom coupé à côté de trente centimètres de
+   vide dès que la colonne était large : on perdait de l'information pour rien,
+   et l'écran avait l'air cassé. Aucun nombre ne peut avoir raison — la colonne
+   fait la largeur que la fenêtre lui laisse, et un `M` ne fait pas la largeur
+   d'un `l`.
+
+   Le découpage en deux morceaux est fait en JavaScript, qui s'éprouve ; la
+   mesure est faite ici, par le seul qui puisse la faire. Le début prend la place
+   disponible et ne s'abrège **que** s'il déborde ; la fin — l'indice, le numéro,
+   l'extension, c'est-à-dire ce qui distingue deux documents du même chantier —
+   ne bouge jamais. */
+.nom-coupable{
+  display:inline-flex;
+  align-items:baseline;
+  min-width:0;
+  max-width:100%;
+}
+.nom-coupable__debut{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+/* `flex:0 0 auto` : elle ne se rogne pas, et ne s'étire pas non plus — elle
+   ferait sinon reculer le début pour du vide. */
+.nom-coupable__fin{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+
+.data-table-shell__head-pousse{
+  margin-left:auto;
+  /* **`width:auto` et `flex:0 0 auto`, sans quoi la poussée ne pousse rien.**
+
+     `.issues-head-menu` fait `width:100%` — c'est juste là où il est né, seul
+     dans sa colonne. Ici, dans une barre en flex, il prend donc **toute** la
+     place restante : `margin-left:auto` n'a plus rien contre quoi pousser, et le
+     bouton reste collé aux pastilles au bord gauche d'un bloc pleine largeur.
+
+     C'est le défaut livré au tour précédent : la règle était écrite, elle était
+     juste, et elle n'avait aucun effet. Le remède est celui que l'en-tête des
+     Sujets applique déjà aux siens — on ne l'avait simplement pas repris ici. */
+  width:auto;
+  flex:0 0 auto;
+}
 
 .data-table-shell__compte {
   display: inline-flex;
@@ -26422,7 +26471,10 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
      lui donner un cadre aurait fait douze cadres par dossier. */
   appearance:none; background:none; border:0; padding:0; margin:0;
   font:inherit; color:inherit; text-align:left; cursor:pointer;
-  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  /* La coupe est celle de `.nom-coupable`, qui l'applique au **début** du nom :
+     la poser ici l'appliquerait au conteneur, et rognerait la fin — c'est-à-dire
+     exactement ce qu'on protège. */
+  min-width:0;
 }
 .choisir-fichier__nom:hover{text-decoration:underline;}
 /* Le refus, à la suite du nom plutôt que dans sa colonne : il ne concerne que

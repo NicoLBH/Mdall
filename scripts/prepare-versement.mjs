@@ -65,6 +65,14 @@ const vers = path.join(racine, "supabase", "functions", "_shared", "versement");
  * fichier dans le même déploiement finissent par ne plus être les mêmes.
  */
 export const LES_DEPARTS = [
+  // Mesurer la justesse depuis la console : la dérive des analyses conservées,
+  // et la réduction d'un bilan à des nombres — la serrure qui empêche un contenu
+  // de chantier d'entrer dans la console. Les cœurs de mesure vivent dans les
+  // services depuis qu'ils servent aux deux côtés : les laisser dans `scripts/`
+  // aurait obligé à les recopier au serveur, et deux copies du même calcul
+  // donnent deux justesses du même système (règle 4).
+  "services/la-derive-des-analyses.js",
+  "services/le-depot-dun-bilan.js",
   // Verser des mails : déplier un `.msg`, lire une archive, ranger.
   "services/les-messages-dun-fichier.js",
   "services/le-depouillement.js",

@@ -77,7 +77,19 @@ export async function conserverUneLecture(ligne = null) {
  *
  * @returns {Promise<object[]|null>}
  */
-export async function listerLesLectures(projectId, { limite = 20 } = {}) {
+/**
+ * **`avecLanalyse` : la liste ne la charge pas, l'export si.**
+ *
+ * La colonne porte la transcription entière. La charger pour cinquante lignes
+ * afin d'en ouvrir une ferait passer cinquante analyses sur le réseau pour en
+ * regarder une — c'est pour cela que la liste s'en passe.
+ *
+ * Mais l'export de diagnostic, lui, n'existe que pour **cela** : sans les
+ * analyses, il dit que la lecture a eu lieu et ne dit pas ce qu'elle a rendu,
+ * c'est-à-dire précisément ce qu'on cherche quand rien ne s'affiche. Il la
+ * demande donc, une fois, au moment du clic.
+ */
+export async function listerLesLectures(projectId, { limite = 20, avecLanalyse = false } = {}) {
   if (!texte(projectId)) return [];
 
   try {
@@ -86,7 +98,7 @@ export async function listerLesLectures(projectId, { limite = 20 } = {}) {
         // **Sans l'analyse.** C'est la plus grosse colonne, et la liste n'en
         // montre rien : la charger pour cinquante lignes afin d'en ouvrir une
         // ferait passer cinquante analyses sur le réseau pour en regarder une.
-        select: LE_SELECT_DUNE_LIGNE,
+        select: avecLanalyse ? LE_SELECT_DUNE_LECTURE : LE_SELECT_DUNE_LIGNE,
         project_id: `eq.${texte(projectId)}`,
         order: "created_at.desc",
         limit: String(Math.max(1, Number(limite) || 20))

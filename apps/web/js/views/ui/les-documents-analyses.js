@@ -34,7 +34,7 @@ import {
   lesComptesParEtat, lesComptesParFamille, parEtat, parFamille
 } from "../../services/les-documents-analyses.js";
 import { leCompteDit } from "../../services/les-familles-de-document.js";
-import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
+import { NOM_COUPABLE, leNomEntier, renderLesMorceauxDuNom } from "./un-nom-coupable.js";
 import {
   LES_TRIS_DES_DOCUMENTS, SENS, ceQueLeTriDit, leTriDesDocumentsValide, leTriDit,
   trierLesDocuments
@@ -391,7 +391,7 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
   // ni l'un ni l'autre n'a d'analyse à montrer.
   const ou = texte(document?.ou) || OU_EN_EST.ANALYSE;
   const attend = ou !== OU_EN_EST.ANALYSE;
-  const nom = ceQuUnNomMontre(document?.titre);
+  const nom = leNomEntier(document?.titre);
 
   return `
     <div class="data-table-shell__row documents-analyses__ligne${ouvert ? " est-ouverte" : ""}${
@@ -413,25 +413,27 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
               pourquoi.
             */""}
             ${/*
-              **Un nom trop long se coupe par le milieu, et porte son nom
-              entier au survol.**
+              **Un nom trop long se coupe par le milieu, après avoir pris toute
+              la place disponible.**
 
               `text-overflow: ellipsis` coupait la fin — et la fin est ce qui
               distingue : deux rapports du même chantier ne diffèrent que par
               leur numéro, au début, et par leur indice, à la fin. Coupés par
-              la fin, ils sont le même nom (`un-nom-trop-long.js`).
+              la fin, ils sont le même nom.
 
-              Le `title` ne porte le nom entier **que s'il a été coupé** : une
-              infobulle qui répète ce qui est lisible est une infobulle qu'on
-              apprend à ignorer.
+              Et la coupe n'est plus un compte de caractères : elle rendait un
+              nom abrégé à côté de trente centimètres de vide dès que la colonne
+              était large. Le début prend la place, la fin ne bouge pas, et
+              c'est le navigateur qui décide s'il faut rogner (`un-nom-coupable.js`).
             */""}
             ${attend
-              ? `<span class="documents-analyses__titre"${nom.titre
-                  ? ` title="${escapeHtml(nom.titre)}"` : ""}>${escapeHtml(nom.dit)}</span>`
-              : `<button type="button" class="row-title-trigger theme-text theme-text--pb"
+              ? `<span class="documents-analyses__titre ${NOM_COUPABLE}"
+                  title="${escapeHtml(nom)}">${renderLesMorceauxDuNom(document?.titre)}</span>`
+              : `<button type="button"
+                  class="row-title-trigger theme-text theme-text--pb ${NOM_COUPABLE}"
                   ${OUVRIR_UN_DOCUMENT}="${escapeHtml(`${document.famille}:${document.id}`)}"
-                  ${nom.titre ? `title="${escapeHtml(nom.titre)}"` : ""}
-                >${escapeHtml(nom.dit)}</button>`}
+                  title="${escapeHtml(nom)}"
+                >${renderLesMorceauxDuNom(document?.titre)}</button>`}
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
             escapeHtml([

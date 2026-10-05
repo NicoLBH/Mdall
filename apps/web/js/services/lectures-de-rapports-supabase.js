@@ -78,13 +78,27 @@ export async function conserverUneLectureDeRapport(ligne = null) {
  * L'analyse gelée n'est pas chargée : c'est la plus grosse colonne — elle porte
  * le Markdown entier —, et le tableau n'en montre rien.
  */
-export async function listerLesLecturesDeRapports(projectId, { limite = 300 } = {}) {
+/**
+ * **`avecLanalyse` : la liste ne la charge pas, l'export si.**
+ *
+ * La colonne porte la transcription entière. La charger pour cinquante lignes
+ * afin d'en ouvrir une ferait passer cinquante analyses sur le réseau pour en
+ * regarder une — c'est pour cela que la liste s'en passe.
+ *
+ * Mais l'export de diagnostic, lui, n'existe que pour **cela** : sans les
+ * analyses, il dit que la lecture a eu lieu et ne dit pas ce qu'elle a rendu,
+ * c'est-à-dire précisément ce qu'on cherche quand rien ne s'affiche. Il la
+ * demande donc, une fois, au moment du clic.
+ */
+export async function listerLesLecturesDeRapports(projectId, {
+  limite = 300, avecLanalyse = false
+} = {}) {
   if (!texte(projectId)) return [];
 
   try {
     const lignes = await requete(LA_TABLE, {
       params: {
-        select: LE_SELECT_DUNE_LIGNE_DE_RAPPORT,
+        select: avecLanalyse ? LE_SELECT_DUN_RAPPORT : LE_SELECT_DUNE_LIGNE_DE_RAPPORT,
         project_id: `eq.${texte(projectId)}`,
         order: "created_at.desc",
         limit: String(Math.max(1, Number(limite) || 300))

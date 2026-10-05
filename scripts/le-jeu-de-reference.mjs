@@ -33,7 +33,7 @@ import {
 } from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
 import {
   MESURE, deposerUnBilan, direLeDepot, ouDeposer
-} from "./la-mesure-des-analyses/le-depot-dun-bilan.js";
+} from "../apps/web/js/services/le-depot-dun-bilan.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const enPourCent = (part) =>

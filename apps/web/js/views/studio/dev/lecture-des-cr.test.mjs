@@ -2334,6 +2334,37 @@ test("sans départ, rien ne s'annonce", () => {
   assert.doesNotMatch(renderLaLecture(unEtat()), /lecture-cr__parti/);
 });
 
+/**
+ * **Et l'écran reste utilisable pendant que le serveur travaille.**
+ *
+ * Le tableau disparaissait au moment du départ — il y avait `|| vue.lance` dans
+ * sa garde, et l'intention était bonne : la phrase devait être la seule chose à
+ * lire. Le résultat était un écran **vide**, une phrase verte au milieu, et plus
+ * aucun moyen de regarder un autre document pendant que celui-ci se lit.
+ *
+ * C'est exactement ce que la file au serveur existe pour éviter : on lance, et
+ * l'on continue à travailler.
+ */
+test("après le départ, le tableau reste là", () => {
+  const html = renderLaLecture(unEtat({
+    lance: "1 rapport envoyé — la lecture se fait sur le serveur.",
+    dejaLus: [uneLigneGardee()],
+    dejaLusMails: [],
+    dejaLusControles: []
+  }));
+
+  // La phrase est là…
+  assert.match(html, /lecture-cr__parti/);
+  // …et le tableau aussi, avec ses lignes et son ordre.
+  assert.match(html, /documents-analyses__table/,
+    "le tableau disparaît : on ne peut plus rien faire qu'attendre");
+  assert.match(html, /data-table-shell__row/, "le tableau est là, mais vide");
+
+  // Et la phrase vient **avant** le tableau : c'est la nouvelle, et on la lit
+  // d'abord.
+  assert.ok(html.indexOf("lecture-cr__parti") < html.indexOf("documents-analyses__table"));
+});
+
 /* ── Les comptes rendus déjà lus, et la lecture qu'on rouvre ─────────────── */
 
 /** Une ligne de `cr_lectures`, telle que l'accueil la reçoit. */
@@ -3012,6 +3043,47 @@ test("le lancement porte la famille ouverte, et non un geste figé", async () =>
   const lancement = source.slice(source.indexOf("async function lancerLaFile"));
   assert.doesNotMatch(lancement.slice(0, 2000), /\?\s*etat\.famille\s*:/,
     "le lancement est revenu à un repli de famille");
+});
+
+/**
+ * **L'export demande les analyses, et c'est tout son objet.**
+ *
+ * Le tableau **ne charge pas** `analyse_gelee` — c'est la plus grosse colonne,
+ * et la liste n'en montre rien. L'export emportait donc les lignes telles
+ * quelles, et disait sur les seize lignes d'un chantier : « l'analyse n'a pas
+ * été emportée ». C'était exact, et c'était un outil de diagnostic qui ne
+ * diagnostiquait rien — la question qu'on pose en l'ouvrant est « qu'est-ce que
+ * la lecture a rendu ? », et c'était la seule à laquelle il ne pouvait pas
+ * répondre.
+ *
+ * Aucun rendu ne peut le montrer : ce sont trois requêtes, et le fichier
+ * s'écrit sur le disque. On lit donc le source, ce qu'on ne s'autorise que pour
+ * ce genre de câblage — et la batterie de mutations a montré qu'il n'était tenu
+ * par rien.
+ */
+test("l'export demande les analyses entières, et non la liste du tableau", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./lecture-des-cr.js", import.meta.url)), "utf8");
+
+  const exporte = source.slice(source.indexOf("async function lesAnalysesEntieres"));
+  const corps = exporte.slice(0, exporte.indexOf("async function exporterTout"));
+
+  // Les trois familles, et chacune demande son analyse.
+  assert.equal((corps.match(/avecLanalyse: true/g) ?? []).length, 3,
+    "une des trois familles est exportée sans son analyse");
+  for (const porte of ["listerLesLectures", "lesFilsDuProjet", "lesRapportsDuProjet"]) {
+    assert.ok(corps.includes(porte), `l'export n'interroge pas ${porte}`);
+  }
+
+  /**
+   * **Et il ne refuse pas de s'écrire quand une table n'a pas répondu.**
+   * C'est au moment où l'on cherche une panne qu'on clique : un export qui se
+   * tait alors laisse sans rien (règle 5).
+   */
+  const ecrit = source.slice(source.indexOf("async function exporterTout"));
+  assert.match(ecrit.slice(0, 900), /entieres \?\? lesAnalysesDeLaVue\(etat\)/,
+    "l'export abandonne quand les analyses n'ont pas pu être demandées");
 });
 
 /**

@@ -46,7 +46,7 @@ import {
   lesCitationsSeRetrouvent as citationsDuProduit,
   lesMarquesSontDeclarees as marquesDuProduit,
   pourChercherUneCitation
-} from "../../apps/web/js/services/les-preuves-dune-lecture.js";
+} from "./les-preuves-dune-lecture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 

@@ -12,6 +12,7 @@ import {
   leDocumentDesigne, renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "./les-documents-analyses.js";
 import { COLONNE_DU_COMPTE, POUSSE_A_DROITE } from "./data-table-shell.js";
+import { NOM_COUPABLE } from "./un-nom-coupable.js";
 import {
   FAMILLE, OU_EN_EST, TOUTES, lesDocumentsAnalyses, lesDocumentsDuTableau,
   lesDocumentsEnAttente
@@ -200,7 +201,10 @@ test("un document qui attend ne s'ouvre pas", () => {
 
   assert.doesNotMatch(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="rapports:r-9"`));
   assert.doesNotMatch(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="mails:m-4"`));
-  assert.match(html, /<span class="documents-analyses__titre">RICT-04\.pdf<\/span>/);
+  // Son titre reste du texte : il porte son nom en deux morceaux comme les
+  // autres, mais dans un `<span>` et non dans un bouton.
+  assert.match(html, /<span class="documents-analyses__titre nom-coupable"/);
+  assert.ok(html.includes(`<span class="${NOM_COUPABLE}__fin">RICT-04.pdf</span>`));
   // Celui qui est analysé, lui, s'ouvre toujours.
   assert.match(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="rapports:r-1"`));
   assert.equal((html.match(/est-en-attente/g) ?? []).length, 3);
@@ -341,24 +345,58 @@ const AVEC_UN_LONG = lesDocumentsAnalyses({
  * On ne pouvait plus voir si le document avait été analysé, qui est la seule
  * question qu'on se pose en arrivant sur cet écran.
  */
-test("un nom trop long se coupe par le milieu, et garde son nom entier au survol", () => {
+test("un nom long se découpe en deux, et la fin ne se rogne pas", () => {
   const html = renderLeTableauDesDocuments({ documents: AVEC_UN_LONG });
 
-  // Coupé : le début et la fin restent, le milieu s'en va.
-  assert.ok(!html.includes(`>${LE_LONG}<`), "le nom entier est rendu tel quel");
-  assert.match(html, /1824_RICT_07/, "le début du nom, où vit le numéro");
-  assert.match(html, /indice_C\.pdf/, "la fin du nom, où vivent l'indice et l'extension");
-  assert.match(html, /…/);
+  /**
+   * **Deux éléments, et c'est tout l'objet.** La feuille de style rogne le
+   * premier s'il déborde, et ne touche jamais au second — où vivent l'indice et
+   * l'extension, c'est-à-dire ce qui distingue deux rapports du même chantier.
+   *
+   * Un seul élément laisserait `text-overflow` couper la fin, et c'est
+   * exactement le défaut qu'on ferme.
+   */
+  assert.match(html, new RegExp(`<span class="${NOM_COUPABLE}__debut">1824_RICT_07`),
+    "le début du nom n'est pas dans son propre élément");
+  assert.ok(html.includes(`<span class="${NOM_COUPABLE}__fin">indice_C.pdf</span>`),
+    "la fin du nom n'est pas protégée dans son propre élément");
+
+  /**
+   * **Et plus aucun caractère de coupe dans le balisage.**
+   *
+   * Le module comptait soixante caractères et coupait toujours : dans une
+   * colonne large, il rendait un nom abrégé à côté de trente centimètres de
+   * vide. Le nom entier est maintenant rendu, en deux morceaux, et c'est le
+   * navigateur qui décide s'il faut rogner.
+   */
+  const ligne = html.slice(html.indexOf("documents-analyses__ligne"));
+  assert.ok(!ligne.slice(0, ligne.indexOf("data-table-shell__cell--titre") + 600).includes("…"),
+    "le nom est encore coupé à l'avance, au lieu de prendre la largeur disponible");
 
   // Et le nom entier est dans l'infobulle.
   assert.ok(html.includes(`title="${LE_LONG}"`), "le nom entier n'est pas au survol");
 });
 
-test("un nom qui tient ne prend pas d'infobulle", () => {
-  // Une infobulle qui répète ce qui est lisible est une infobulle qu'on apprend
-  // à ignorer — et l'on finit par ignorer celles qui disent quelque chose.
+/**
+ * **Un nom court porte quand même son infobulle**, et c'est assumé : on ne sait
+ * pas s'il tient, puisque c'est le navigateur qui mesure. Entre une infobulle
+ * parfois redondante et un nom qu'on ne peut plus retrouver, on garde
+ * l'infobulle.
+ */
+test("un nom court s'affiche entier, sans début vide", () => {
   const html = renderLeTableauDesDocuments({ documents: TOUS, famille: FAMILLE.CONTROLE });
-  assert.ok(!html.includes('title="RICT-03.pdf"'));
+  assert.ok(html.includes('title="RICT-03.pdf"'));
+  assert.ok(html.includes(`<span class="${NOM_COUPABLE}__fin">RICT-03.pdf</span>`));
+  /**
+   * **Aucun élément de début, et non un élément vide.**
+   *
+   * L'épreuve cherchait `__debut"></span>` — une balise strictement vide. Un
+   * début réduit à une espace la laissait passer, et la batterie de mutations
+   * l'a montré : ce qu'on veut interdire est le morceau de balisage, pas son
+   * contenu.
+   */
+  assert.ok(!html.includes(`${NOM_COUPABLE}__debut`),
+    "un morceau de balisage de début sur chaque ligne courte");
 });
 
 /* ── L'état en colonne ────────────────────────────────────────────────────── */
@@ -413,6 +451,46 @@ test("l'état est dans sa propre cellule, pas collé au titre", () => {
   };
   assert.ok(ou("issue-row-title-grid__meta") < ou("documents-analyses__badge"),
     "le badge est resté dans la grille du titre");
+});
+
+/**
+ * **La classe était là, et elle ne poussait rien.**
+ *
+ * `margin-left:auto` seul ne suffit pas : `.issues-head-menu` fait `width:100%`
+ * — c'est juste là où il est né, seul dans sa colonne —, et dans une barre en
+ * flex il prend donc toute la place restante. La marge automatique n'a plus rien
+ * contre quoi pousser, et le bouton reste collé aux pastilles.
+ *
+ * Aucun rendu ne peut le montrer : le balisage est identique dans les deux cas.
+ * On lit donc la feuille, ce qu'on ne s'autorise que pour ce genre de défaut —
+ * celui qui est passé en revue, en épreuve, et jusqu'à l'écran.
+ */
+test("la poussée à droite reprend sa largeur au menu", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const feuille = readFileSync(
+    fileURLToPath(new URL("../../../style.css", import.meta.url)), "utf8");
+
+  const debut = feuille.indexOf(`.${POUSSE_A_DROITE}{`);
+  assert.ok(debut >= 0, "la classe de poussée n'est plus déclarée");
+
+  /**
+   * **Les commentaires se retirent avant de chercher les déclarations.**
+   *
+   * Celui de cette règle cite `width:auto` et `flex:0 0 auto` pour expliquer
+   * pourquoi ils sont là — et l'épreuve les y trouvait. Elle lisait sa propre
+   * documentation : on pouvait retirer les deux déclarations, elle restait
+   * verte, et la batterie de mutations l'a montré en une fois. Un garde qu'on ne
+   * peut pas faire tomber n'en est pas un (règle 4).
+   */
+  const corps = feuille.slice(debut, feuille.indexOf("}", debut));
+  const regle = corps.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  assert.match(regle, /margin-left:\s*auto/);
+  assert.match(regle, /width:\s*auto/,
+    "le menu garde width:100% : la marge automatique n'a rien contre quoi pousser");
+  assert.match(regle, /flex:\s*0 0 auto/,
+    "le menu peut encore s'étirer : il recouvrirait la place qu'on veut vide");
 });
 
 /* ── Le tri ───────────────────────────────────────────────────────────────── */

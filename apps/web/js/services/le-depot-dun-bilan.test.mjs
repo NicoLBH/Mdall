@@ -19,10 +19,10 @@ import test from "node:test";
 import {
   MESURE, direLeDepot, deposerUnBilan, leBilanAVerser, ouDeposer
 } from "./le-depot-dun-bilan.js";
-import { leBilan } from "../la-batterie-des-perturbations/passer-la-batterie.js";
-import { VERDICT } from "../la-batterie-des-perturbations/la-relation.js";
-import { CE_QUI_SEST_PASSE, leBilanDeLaDerive } from "../la-derive-des-analyses/la-derive.js";
-import { ETAPE, leBilanDuJeu } from "../le-jeu-de-reference/la-confrontation.js";
+import { leBilan } from "../../../../scripts/la-batterie-des-perturbations/passer-la-batterie.js";
+import { VERDICT } from "../../../../scripts/la-batterie-des-perturbations/la-relation.js";
+import { CE_QUI_SEST_PASSE, leBilanDeLaDerive } from "./la-derive-des-analyses.js";
+import { ETAPE, leBilanDuJeu } from "../../../../scripts/le-jeu-de-reference/la-confrontation.js";
 
 /* ── Rien ne traverse qui ne soit un nombre ───────────────────────────────── */
 
@@ -313,7 +313,7 @@ test("chaque clé que ce module émet est une clé que la base garde", async () 
   const { fileURLToPath } = await import("node:url");
 
   const sql = readFileSync(fileURLToPath(new URL(
-    "../../supabase/migrations/202611250001_les_mesures_de_justesse.sql", import.meta.url)
+    "../../../../supabase/migrations/202611250001_les_mesures_de_justesse.sql", import.meta.url)
   ), "utf8");
 
   const declare = sql.match(/v_permis text\[\] := array\[([\s\S]*?)\];/);

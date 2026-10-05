@@ -26,7 +26,7 @@
  * ## Ce sont les invariants de la batterie, et c'est voulu
  *
  * Les deux premiers sont **exactement** ceux que
- * `scripts/la-mesure-des-analyses/les-invariants.js` pose, et c'est ce module-ci
+ * `les-invariants-dune-lecture.js` pose, et c'est ce module-ci
  * qui les tient maintenant : la batterie les lui demande. Deux écritures de
  * « cette citation figure-t-elle dans le document » auraient fini par ne plus
  * répondre la même chose, et l'écran aurait dit vert là où la mesure disait

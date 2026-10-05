@@ -35,10 +35,10 @@ import {
 // Les mots des états viennent du tableau des analyses : deux écrans qui parlent
 // du même document avec deux mots différents finiraient par se contredire.
 import { CE_QUE_DIT_LETAT_DUN, OU_EN_EST } from "../../services/les-documents-analyses.js";
-// **La même coupe que le tableau des analyses.** Les deux listent les mêmes
-// documents du même chantier : deux façons de raccourcir un nom auraient donné
-// deux noms différents pour un même fichier, d'un écran à l'autre (règle 10).
-import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
+// **Le même découpage que le tableau des analyses.** Les deux listent les mêmes
+// documents du même chantier : deux façons de couper un nom auraient donné deux
+// noms différents pour un même fichier, d'un écran à l'autre (règle 10).
+import { NOM_COUPABLE, leNomEntier, renderLesMorceauxDuNom } from "./un-nom-coupable.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 /**
@@ -123,7 +123,7 @@ function renderUneEntree(entree, choisis = null) {
   const dit = refus || (entree.lecture ? (CE_QUE_CA_DEMANDE[entree.lecture] ?? "") : "");
   const coche = !dossier && entree.choisissable;
   const cochee = coche && Boolean(choisis?.has?.(entree.id));
-  const nom = ceQuUnNomMontre(entree.nom);
+  const nom = leNomEntier(entree.nom);
 
   return `
     <div class="documents-repo__row documents-repo__row--file${
@@ -138,18 +138,16 @@ function renderUneEntree(entree, choisis = null) {
         <span class="documents-repo__icon">${
           svgIcon(dossier ? "file-directory" : "file", { className: "octicon" })}</span>
         ${/*
-          **L'infobulle porte le nom entier dès qu'il a été coupé**, et ce qu'il
-          coûtera sinon. Les deux ne tiennent pas ensemble, et c'est le nom qui
-          l'emporte : le prix est annoncé dans la barre de lancement, pour toute
-          la file, alors que le nom coupé ne se retrouve nulle part ailleurs.
+          **L'infobulle porte le nom entier, et non ce que la lecture coûtera.**
+          Les deux ne tiennent pas ensemble, et c'est le nom qui l'emporte : le
+          prix est annoncé dans la barre de lancement, pour toute la file, alors
+          que le nom coupé ne se retrouve nulle part ailleurs.
         */""}
         ${marque
-          ? `<button type="button" class="choisir-fichier__nom" ${marque}
-               ${nom.titre || dit
-                 ? `title="${escapeHtml(nom.titre || dit)}"` : ""}>${
-                 escapeHtml(nom.dit)}</button>`
-          : `<span class="documents-repo__name"${nom.titre
-              ? ` title="${escapeHtml(nom.titre)}"` : ""}>${escapeHtml(nom.dit)}</span>`}
+          ? `<button type="button" class="choisir-fichier__nom ${NOM_COUPABLE}" ${marque}
+               title="${escapeHtml(nom)}">${renderLesMorceauxDuNom(entree.nom)}</button>`
+          : `<span class="documents-repo__name ${NOM_COUPABLE}"
+              title="${escapeHtml(nom)}">${renderLesMorceauxDuNom(entree.nom)}</span>`}
         ${refus ? `<span class="choisir-fichier__refus mono-small">${escapeHtml(refus)}</span>` : ""}
       </div>
       ${/*

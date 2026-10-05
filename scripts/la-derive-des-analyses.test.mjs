@@ -19,10 +19,10 @@ import assert from "node:assert/strict";
 
 import {
   OU_SONT_LES_GELEES, laCleDuDocument, lesSuitesDeLecture, uneGelee
-} from "./la-derive-des-analyses/les-analyses-gelees.js";
+} from "../apps/web/js/services/les-analyses-gelees.js";
 import {
   CE_QUI_SEST_PASSE, laDeriveDesGelees, leBilanDeLaDerive, leFranchissement
-} from "./la-derive-des-analyses/la-derive.js";
+} from "../apps/web/js/services/la-derive-des-analyses.js";
 import { lesGeleesDunProjet } from "./la-derive-des-analyses/les-gelees-du-serveur.js";
 import {
   unAvis, uneBaseDeCarton, uneLigneDeCompteRendu, uneLigneDeRapport

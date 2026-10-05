@@ -36,7 +36,7 @@
  * qu'un relevé qu'on ne sait pas rapprocher n'est pas un relevé qui a disparu.
  */
 
-import { FAMILLE } from "../../apps/web/js/services/les-familles-de-document.js";
+import { FAMILLE } from "./les-familles-de-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
