@@ -314,3 +314,131 @@ test("une entrée de rail inconnue ne change pas la vue", () => {
   assert.equal(laFamilleDesignee(TOUTES), TOUTES);
   assert.equal(laFamilleDesignee("autre"), null);
 });
+
+/* ── Un nom trop long ─────────────────────────────────────────────────────── */
+
+const LE_LONG = "1824_RICT_07_VERIFAS_Montholon_Mediatheque_phase_EXE_indice_C.pdf";
+
+const AVEC_UN_LONG = lesDocumentsAnalyses({
+  controles: [{
+    id: "r-7", document: LE_LONG, numero_de_rapport: "RICT-07", etabli_le: "2026-04-18",
+    created_at: "2026-10-05T10:00:00Z", mesures: { avis: 12, marques: 4 }
+  }]
+});
+
+/**
+ * **Un nom de quatre-vingts caractères poussait l'état hors de la ligne.**
+ *
+ * On ne pouvait plus voir si le document avait été analysé, qui est la seule
+ * question qu'on se pose en arrivant sur cet écran.
+ */
+test("un nom trop long se coupe par le milieu, et garde son nom entier au survol", () => {
+  const html = renderLeTableauDesDocuments({ documents: AVEC_UN_LONG });
+
+  // Coupé : le début et la fin restent, le milieu s'en va.
+  assert.ok(!html.includes(`>${LE_LONG}<`), "le nom entier est rendu tel quel");
+  assert.match(html, /1824_RICT_07/, "le début du nom, où vit le numéro");
+  assert.match(html, /indice_C\.pdf/, "la fin du nom, où vivent l'indice et l'extension");
+  assert.match(html, /…/);
+
+  // Et le nom entier est dans l'infobulle.
+  assert.ok(html.includes(`title="${LE_LONG}"`), "le nom entier n'est pas au survol");
+});
+
+test("un nom qui tient ne prend pas d'infobulle", () => {
+  // Une infobulle qui répète ce qui est lisible est une infobulle qu'on apprend
+  // à ignorer — et l'on finit par ignorer celles qui disent quelque chose.
+  const html = renderLeTableauDesDocuments({ documents: TOUS, famille: FAMILLE.CONTROLE });
+  assert.ok(!html.includes('title="RICT-03.pdf"'));
+});
+
+/* ── L'état en colonne ────────────────────────────────────────────────────── */
+
+/**
+ * **L'état a sa colonne**, et c'est tout l'objet du changement : à côté du
+ * titre, il se perdait dès qu'un nom était long.
+ */
+test("l'état est dans sa propre cellule, pas collé au titre", () => {
+  const html = renderLeTableauDesDocuments({ documents: AVEC_UN_LONG });
+
+  // Trois colonnes, et la grille les compte une seule fois : une largeur écrite
+  // pour deux colonnes au-dessus de trois décale l'en-tête.
+  assert.match(html, /--data-table-cols:\s*minmax\(240px,2fr\) 128px 200px/);
+  assert.match(html, /<div class="data-table-shell__col">État<\/div>/);
+
+  // Le badge vit dans une cellule, et non dans la grille de titre.
+  const ou = (quoi) => {
+    const rang = html.indexOf(quoi);
+    assert.ok(rang >= 0, `introuvable : ${quoi}`);
+    return rang;
+  };
+  assert.ok(ou("issue-row-title-grid__meta") < ou("documents-analyses__badge"),
+    "le badge est resté dans la grille du titre");
+});
+
+/* ── Le tri ───────────────────────────────────────────────────────────────── */
+
+test("le menu de tri porte les deux ordres, avec leur question", () => {
+  const html = renderLeTableauDesDocuments({ documents: TOUS });
+
+  assert.match(html, /Ranger le tableau/);
+  assert.match(html, /Analysé en dernier/);
+  assert.match(html, /Date du document/);
+  // La question sous le libellé : les deux ordres se confondent sans elle.
+  assert.match(html, /Lequel vient d&#39;être lu \?/);
+  assert.match(html, /Lequel est le plus récent sur le chantier \?/);
+});
+
+test("le bouton du menu porte l'ordre en cours", () => {
+  // « Trier » seul obligerait à ouvrir le menu pour savoir comment c'est rangé.
+  const parDefaut = renderLeTableauDesDocuments({ documents: TOUS });
+  assert.match(parDefaut, /<span>Analysé en dernier<\/span>/);
+
+  const parDocument = renderLeTableauDesDocuments({ documents: TOUS, tri: "document" });
+  assert.match(parDocument, /<span>Date du document<\/span>/);
+});
+
+test("l'ordre choisi change vraiment l'ordre des lignes", () => {
+  const ou = (html, quoi) => html.indexOf(quoi);
+
+  // Par date d'analyse : le fil (1er octobre) avant le rapport (28 septembre).
+  const parAnalyse = renderLeTableauDesDocuments({ documents: TOUS });
+  assert.ok(ou(parAnalyse, "Reprise des enduits") < ou(parAnalyse, "RICT-03.pdf"));
+
+  // Par date de document : le rapport (18 avril) avant le fil (2 mars).
+  const parDocument = renderLeTableauDesDocuments({ documents: TOUS, tri: "document" });
+  assert.ok(ou(parDocument, "RICT-03.pdf") < ou(parDocument, "Reprise des enduits"),
+    "le menu de tri est une décoration : l'ordre ne change pas");
+});
+
+test("le tri vient après le filtre, et sa phrase compte ce qui est montré", () => {
+  // Un document en attente n'a pas de date d'analyse : la phrase doit parler de
+  // ce qu'on a sous les yeux, pas du chantier entier.
+  // La forme d'une ligne de `versements` : un geste, et ses pièces dans
+  // `avancement.pas`. Une fixture inventée aurait rendu une liste vide, et
+  // l'épreuve aurait vérifié la phrase de rien.
+  const avecAttente = lesDocumentsDuTableau({
+    analyses: TOUS,
+    enAttente: lesDocumentsEnAttente([{
+      id: "v-rapports", geste: "rapports", statut: "en_cours",
+      cree_le: "2026-10-05T11:00:00Z",
+      avancement: { pas: [{ id: "d-9", nom: "RICT-09.pdf", ou: "attend" }] }
+    }])
+  });
+  assert.ok(avecAttente.some((un) => un.titre === "RICT-09.pdf"),
+    "le document en attente n'est pas entré dans le tableau");
+  // Et il ne porte pas de date de document : on ne l'a pas encore lu.
+  assert.equal(avecAttente.find((un) => un.titre === "RICT-09.pdf").quand, "");
+
+  const html = renderLeTableauDesDocuments({ documents: avecAttente, tri: "document" });
+  // Le document en attente ne porte pas de date de document : il reste à la fin,
+  // et la phrase le dit — sinon le tri paraîtrait n'avoir rien trié.
+  assert.match(html, /ne porte pas de date de document/);
+  assert.match(html, /il reste à la fin/);
+});
+
+test("rien à expliquer sur l'ordre ne s'explique pas", () => {
+  // Une phrase qui s'affiche toujours ne se lit jamais.
+  const html = renderLeTableauDesDocuments({ documents: TOUS });
+  assert.doesNotMatch(html, /reste à la fin/);
+});

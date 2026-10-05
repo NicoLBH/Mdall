@@ -61,6 +61,7 @@ export const OUTIL = {
 export const LES_OUTILS = [
   {
     cle: OUTIL.PERTURBATIONS,
+    commande: "node scripts/la-batterie-des-perturbations.mjs --serveur",
     libelle: "La batterie de perturbations",
     question: "Si je dérange le document, la lecture bouge-t-elle comme il faut ?",
     comment: "Six perturbations du document — jamais du code. Un relevé déplacé "
@@ -73,6 +74,7 @@ export const LES_OUTILS = [
   },
   {
     cle: OUTIL.DERIVE,
+    commande: "node scripts/la-derive-des-analyses.mjs --serveur",
     libelle: "La dérive des analyses",
     question: "Le même document, relu, donne-t-il la même chose ?",
     comment: "Lue dans les analyses déjà conservées, sans rien relancer. Elle "
@@ -85,6 +87,7 @@ export const LES_OUTILS = [
   },
   {
     cle: OUTIL.JEU_DE_REFERENCE,
+    commande: "node scripts/le-jeu-de-reference.mjs --serveur",
     libelle: "Le jeu de référence",
     question: "Sur des documents dont je connais la réponse, combien en trouve-t-on ?",
     comment: "Un corpus annoté à la main, étape par étape. Il porte aussi des "
@@ -97,6 +100,9 @@ export const LES_OUTILS = [
   },
   {
     cle: OUTIL.INVARIANTS,
+    // Les invariants sont posés par les deux premiers outils : ils se
+    // remplissent donc avec eux, et n'ont pas de commande à eux.
+    commande: "node scripts/la-batterie-des-perturbations.mjs --serveur",
     libelle: "Les invariants",
     question: "Y a-t-il des choses qui doivent être vraies de toute lecture ?",
     comment: "Les propriétés qu'aucune lecture ne peut violer, quel que soit le "
@@ -105,6 +111,39 @@ export const LES_OUTILS = [
     attrape: "Les lectures impossibles, sans avoir besoin de connaître la "
       + "bonne réponse.",
     aveugle: "Une lecture parfaitement possible et parfaitement fausse."
+  }
+];
+
+/**
+ * **Comment un bilan arrive ici**, et pourquoi il faut le dire.
+ *
+ * L'écran montrait « jamais lancé » sur les quatre outils, et c'était exact :
+ * ils ne déposent que depuis `--serveur`, en terminal. Mais il ne disait pas
+ * **comment changer cela** — lancer une analyse dans le produit n'y dépose
+ * rien, et personne ne pouvait le deviner. Quatre cartes qui ne se rempliront
+ * jamais, sans mode d'emploi : c'est une promesse qu'on ne tient pas (règle 12).
+ *
+ * Le premier paragraphe est le plus important, parce qu'il lève la confusion
+ * exacte : cet écran ne mesure pas une analyse, il mesure le procédé.
+ */
+export const COMMENT_UN_BILAN_ARRIVE = [
+  {
+    quoi: "Lancer une analyse ne remplit pas cet écran",
+    pourquoi: "ces quatre outils mesurent le procédé sur un corpus, pas une "
+      + "lecture. « Ce document a-t-il été bien lu ? » se répond dans le détail "
+      + "du document, à l'Atelier ; ici, c'est « le procédé tient-il ? »."
+  },
+  {
+    quoi: "Ils se lancent depuis un terminal",
+    pourquoi: "avec SUPABASE_URL, SUPABASE_JETON et MDALL_PROJET dans "
+      + "l'environnement, et MDALL_PROCEDE pour nommer le modèle mesuré. La "
+      + "commande de chaque outil est écrite sous son nom."
+  },
+  {
+    quoi: "Sans --serveur, rien ne se dépose",
+    pourquoi: "et c'est voulu : l'auto-épreuve mesure deux lecteurs de carton. "
+      + "Déposer son bilan montrerait la justesse de l'instrument comme celle du "
+      + "produit — un écran vert obtenu sans avoir lu un seul document."
   }
 ];
 

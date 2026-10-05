@@ -34,6 +34,10 @@ import {
   lesComptesParEtat, lesComptesParFamille, parEtat, parFamille
 } from "../../services/les-documents-analyses.js";
 import { leCompteDit } from "../../services/les-familles-de-document.js";
+import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
+import {
+  LES_TRIS_DES_DOCUMENTS, ceQueLeTriDit, leTriDesDocumentsValide, leTriDit, trierLesDocuments
+} from "../../services/le-tri-des-documents.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -46,6 +50,18 @@ export const OUVRIR_UN_DOCUMENT = "data-document-analyse";
 
 /** Celui par lequel il reconnaît un clic sur une pastille du filtre. */
 export const FILTRER_PAR_ETAT = "data-etat-analyse";
+
+/** Celui par lequel il reconnaît un clic sur un ordre du menu de tri. */
+export const TRIER_LES_DOCUMENTS = "data-tri-analyse";
+
+/**
+ * L'identifiant du menu de tri, pour `menus-den-tete.js`.
+ *
+ * Écrit ici et lu par l'écran : c'est le même nom des deux côtés, et deux
+ * écritures d'un même nom se renomment un jour d'un seul côté — le menu
+ * garderait son attribut, le clic ne le verrait plus (règle 10).
+ */
+export const LE_MENU_DU_TRI = "tri-des-documents";
 
 /**
  * Le rail des familles.
@@ -116,7 +132,7 @@ export function renderLeRailDesFamilles({
  */
 export function renderLeTableauDesDocuments({
   documents = null, famille = TOUTES, enCours = false, rate = false, ouverte = "",
-  filtre = ""
+  filtre = "", tri = ""
 } = {}) {
   const ce = ceQueDitLaFamille(famille) ?? ceQueDitLaFamille(TOUTES);
 
@@ -149,7 +165,15 @@ export function renderLeTableauDesDocuments({
    * rendrait trois.
    */
   const comptes = lesComptesParEtat(deLaFamille);
-  const ici = parEtat(deLaFamille, filtre);
+  /**
+   * **Le tri vient après le filtre**, et c'est le seul ordre possible : trier
+   * puis filtrer donnerait le même résultat mais aurait rangé des lignes qu'on
+   * jette ensuite. Surtout, la phrase du tri compte les documents **montrés** —
+   * « 3 sans date » doit parler de ce qu'on a sous les yeux.
+   */
+  const ordre = leTriDesDocumentsValide(tri);
+  const ici = trierLesDocuments(parEtat(deLaFamille, filtre), ordre);
+  const ceQueLeTri = ceQueLeTriDit(ici, ordre);
 
   return `
     <section class="documents-analyses">
@@ -161,7 +185,18 @@ export function renderLeTableauDesDocuments({
       */""}
       ${renderDataTableShell({
         className: "documents-analyses__table",
-        gridTemplate: "minmax(280px,2fr) 240px",
+        /**
+         * **Trois colonnes, et non deux.**
+         *
+         * L'état vivait en badge à côté du titre. Avec un nom de document de
+         * quatre-vingts caractères, il se retrouvait poussé hors de la ligne :
+         * on ne pouvait plus voir si le document avait été analysé, qui est la
+         * seule question qu'on se pose en arrivant.
+         *
+         * Le titre perd donc quarante pixels, et l'état en gagne une colonne à
+         * lui — toujours au même endroit, quelle que soit la longueur du nom.
+         */
+        gridTemplate: "minmax(240px,2fr) 128px 200px",
         state: ici.length ? "ready" : "empty",
         emptyHtml: renderDataTableEmptyState(filtre
           ? {
@@ -170,18 +205,91 @@ export function renderLeTableauDesDocuments({
           }
           : { title: ce.vide.titre, description: ce.vide.quoi }),
         headHtml: renderDataTableHead({
-          columns: [{
-            html: `${renderDataTableCount({
-              iconeHtml: svgIcon(ce.icone, { className: "octicon" }),
-              dit: leCompteDit(famille, deLaFamille.length),
-              titre: "Les documents de cette famille"
-            })}${renderLesPastillesDuFiltre(comptes, filtre)}`,
-            className: COLONNE_DU_COMPTE
-          }]
+          columns: [
+            {
+              html: `${renderDataTableCount({
+                iconeHtml: svgIcon(ce.icone, { className: "octicon" }),
+                dit: leCompteDit(famille, deLaFamille.length),
+                titre: "Les documents de cette famille"
+              })}${renderLesPastillesDuFiltre(comptes, filtre)}${renderLeMenuDuTri(ordre)}`,
+              className: COLONNE_DU_COMPTE
+            },
+            "État",
+            "Ce que la lecture a valu"
+          ]
         }),
         bodyHtml: ici.map((un) => renderUnDocumentAnalyse(un, { ouverte, famille })).join("")
       })}
+      ${/*
+        **Ce que le tri n'a pas pu ranger, sous le tableau.**
+
+        Sans cette phrase, trier par date de document paraîtrait n'avoir rien
+        trié : la moitié de la liste serait restée en place, et rien
+        n'expliquerait pourquoi (règle 5).
+      */""}
+      ${ceQueLeTri
+        ? `<p class="documents-analyses__mot mono-small">${escapeHtml(ceQueLeTri)}</p>`
+        : ""}
     </section>
+  `;
+}
+
+/**
+ * Le menu de tri, dans l'en-tête du tableau.
+ *
+ * ## Il ne dessine rien de neuf
+ *
+ * `issues-head-menu` et `gh-menu` sont ceux de l'onglet Sujets, et l'ouverture
+ * est celle de `menus-den-tete.js` — elle existe précisément pour ne pas être
+ * recopiée. Un menu à nous aurait eu son gris, son décalage et son
+ * `aria-expanded` oublié (règle 4).
+ *
+ * ## L'ordre courant est dans le bouton
+ *
+ * « Trier » seul obligerait à ouvrir le menu pour savoir comment la liste est
+ * rangée. Le bouton porte donc le libellé de l'ordre en cours, qui est aussi la
+ * réponse à « pourquoi ce document est-il en haut ? ».
+ */
+function renderLeMenuDuTri(ordre) {
+  const ici = leTriDit(ordre);
+
+  return `
+    <div class="issues-head-menu sujets-head-menu">
+      <button class="issues-head-menu__btn" type="button"
+        data-sujets-menu="${LE_MENU_DU_TRI}"
+        aria-haspopup="true" aria-expanded="false"
+        title="Changer l'ordre du tableau"
+      >${svgIcon("sort-desc", { className: "octicon" })}
+        <span>${escapeHtml(ici.libelle)}</span>
+        ${svgIcon("chevron-down", { className: "gh-chevron" })}
+      </button>
+
+      <div class="gh-menu subject-meta-dropdown issues-head-menu__dropdown sujets-head-menu__liste"
+        data-sujets-menu-liste="${LE_MENU_DU_TRI}" role="dialog">
+        <div class="subject-meta-dropdown__title">Ranger le tableau</div>
+        <div class="subject-meta-dropdown__body">
+          ${LES_TRIS_DES_DOCUMENTS.map((un) => `
+            <button type="button" class="select-menu__item${
+              un.cle === ici.cle ? " is-active" : ""}"
+              ${TRIER_LES_DOCUMENTS}="${escapeHtml(un.cle)}"
+              aria-pressed="${un.cle === ici.cle}">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">${escapeHtml(un.libelle)}</span>
+                  ${/*
+                    **La question, sous le libellé.** « Date du document » et
+                    « Analysé en dernier » se confondent tant qu'on ne dit pas
+                    à quoi chacun répond — et c'est exactement la confusion
+                    qu'on vient lever.
+                  */""}
+                  <span class="select-menu__item-meta">${escapeHtml(un.question)}</span>
+                </span>
+              </span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -249,6 +357,7 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
   // ni l'un ni l'autre n'a d'analyse à montrer.
   const ou = texte(document?.ou) || OU_EN_EST.ANALYSE;
   const attend = ou !== OU_EN_EST.ANALYSE;
+  const nom = ceQuUnNomMontre(document?.titre);
 
   return `
     <div class="data-table-shell__row documents-analyses__ligne${ouvert ? " est-ouverte" : ""}${
@@ -269,12 +378,26 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
               écran en panne (règle 5) — il reste donc du texte, et le badge dit
               pourquoi.
             */""}
+            ${/*
+              **Un nom trop long se coupe par le milieu, et porte son nom
+              entier au survol.**
+
+              `text-overflow: ellipsis` coupait la fin — et la fin est ce qui
+              distingue : deux rapports du même chantier ne diffèrent que par
+              leur numéro, au début, et par leur indice, à la fin. Coupés par
+              la fin, ils sont le même nom (`un-nom-trop-long.js`).
+
+              Le `title` ne porte le nom entier **que s'il a été coupé** : une
+              infobulle qui répète ce qui est lisible est une infobulle qu'on
+              apprend à ignorer.
+            */""}
             ${attend
-              ? `<span class="documents-analyses__titre">${escapeHtml(document.titre)}</span>`
+              ? `<span class="documents-analyses__titre"${nom.titre
+                  ? ` title="${escapeHtml(nom.titre)}"` : ""}>${escapeHtml(nom.dit)}</span>`
               : `<button type="button" class="row-title-trigger theme-text theme-text--pb"
                   ${OUVRIR_UN_DOCUMENT}="${escapeHtml(`${document.famille}:${document.id}`)}"
-                >${escapeHtml(document.titre)}</button>`}
-            ${renderLeBadgeDeLetat(document)}
+                  ${nom.titre ? `title="${escapeHtml(nom.titre)}"` : ""}
+                >${escapeHtml(nom.dit)}</button>`}
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
             escapeHtml([
@@ -287,6 +410,12 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
             ].filter(Boolean).join(" • "))}</span>
         </span>
       </div>
+      ${/*
+        **L'état a sa colonne**, et c'est tout l'objet de ce changement : à côté
+        du titre, il se perdait hors de la ligne dès qu'un nom était long, et
+        l'on ne savait plus si le document avait été analysé.
+      */""}
+      <div class="data-table-shell__cell">${renderLeBadgeDeLetat(document)}</div>
       <div class="data-table-shell__cell mono-small">${escapeHtml(texte(document?.dit))}</div>
     </div>
   `;
@@ -295,12 +424,17 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
 /**
  * Le badge qui dit où en est un document.
  *
- * ## Pourquoi un badge, et non une colonne
+ * ## Il a fini par prendre une colonne, et voici pourquoi
  *
- * Le tableau en a déjà une, à droite, qui dit ce que la lecture a valu — « 12
- * avis », « 7 messages ». L'état n'est pas une mesure : c'est ce qui dit si la
- * mesure existe. Posé à côté du titre, il se lit **avant** d'avoir parcouru la
- * ligne, qui est le moment où l'on décide de cliquer ou non.
+ * Il vivait à côté du titre, pour une raison qui tenait : l'état n'est pas une
+ * mesure — c'est ce qui dit si la mesure existe —, et posé contre le titre il se
+ * lisait avant d'avoir parcouru la ligne.
+ *
+ * **Un nom de quatre-vingts caractères a eu raison de ce raisonnement.** Le
+ * badge se retrouvait poussé hors de la ligne, et l'on ne pouvait plus voir si
+ * le document avait été analysé. Il garde donc sa forme de badge — l'état se lit
+ * d'un coup d'œil, pas en lisant un mot — et prend une colonne, où il est
+ * toujours au même endroit quelle que soit la longueur du nom.
  *
  * Il reprend la coque des badges de l'application — celle des Actions —, et sa
  * couleur dit l'action : bleu pour ce qui est fait et se rouvre, attention pour

@@ -307,7 +307,20 @@ export function lesDocumentsEnAttente(lignes = []) {
         famille,
         titre: texte(une?.nom) || ceQueDitLaFamille(famille).nom,
         repere: "",
-        quand: quand.slice(0, 10),
+        /**
+         * **Aucune date de document, et surtout pas celle de la file.**
+         *
+         * Elle portait `cree_le`, le jour où la lecture a été lancée. C'était
+         * juste tant que `quand` n'était qu'un mot dans la ligne de méta ; le
+         * tri par date de document en a fait un mensonge : un document mis en
+         * file ce matin remontait en tête d'un ordre qui promet « le plus récent
+         * du chantier », alors que **personne ne sait de quand il date** — on ne
+         * l'a pas encore lu (règle 5).
+         *
+         * La date de la file reste dans `lueLe`, qui est exactement cela : la
+         * date de la tentative de lecture.
+         */
+        quand: "",
         lueLe: quand,
         dit: CE_QUE_DIT_LE_PAS[texte(une?.ou)] ?? CE_QUE_DIT_LE_PAS.attend,
         luPar: "",
