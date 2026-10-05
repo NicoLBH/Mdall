@@ -70,6 +70,9 @@ export const LE_TRAFIC = "trafic";
 /** Le journal des consultations de la console. */
 export const LES_CONSULTATIONS = "consultations";
 
+/** La justesse des analyses : ce que les quatre outils de mesure ont trouvé. */
+export const LA_JUSTESSE = "justesse";
+
 export const LES_RUBRIQUES = [
   {
     cle: LES_COMPTES,
@@ -109,6 +112,16 @@ export const LES_RUBRIQUES = [
     explication: "Des venues et des comptes — dix venues d'une personne ne font "
       + "pas dix personnes. Le temps compté est celui où l'application est au "
       + "premier plan et touchée : ce n'est pas du temps de travail."
+  },
+  {
+    cle: LA_JUSTESSE,
+    onglet: ONGLET.EXPLOITATION,
+    libelle: "La justesse",
+    icone: "beaker",
+    question: "Les documents sont-ils bien lus, et comment le sait-on ?",
+    explication: "Quatre outils, quatre angles, et aucun qui suffise seul. Jamais "
+      + "un score unique : un taux global ne dit pas sur quoi l'on se trompe, et "
+      + "c'est tout ce qu'on voudrait savoir."
   },
   {
     cle: LES_CONSULTATIONS,

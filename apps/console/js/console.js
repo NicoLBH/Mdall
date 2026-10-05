@@ -46,12 +46,13 @@
  */
 
 import { LA_CONSOLE } from "../partage/js/services/la-porte-de-la-console.js";
-import { ONGLETS_DE_LA_CONSOLE } from "../partage/js/services/les-onglets-de-la-console.js";
+import {
+  ONGLET, ONGLETS_DE_LA_CONSOLE
+} from "../partage/js/services/les-onglets-de-la-console.js";
 import { svgIcon } from "../partage/js/ui/icons.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import {
-  LA_SANTE, LES_COMPTES, LES_CONSULTATIONS, LE_TRAFIC, LUSAGE, laPremiereRubriqueDe,
-  laRubriqueValide, lesRubriquesDeLonglet, ongletDeLaRubrique
+  laPremiereRubriqueDe, laRubriqueValide, lesRubriquesDeLonglet, ongletDeLaRubrique
 } from "../partage/js/services/les-rubriques-de-la-console.js";
 import { renderProjectRail } from "../partage/js/views/ui/project-rail.js";
 import {
@@ -315,14 +316,22 @@ function renderLeRail(actif) {
  * rien — ce qu'elle était, faute d'un second onglet.
  */
 function dessinerLaRubrique(cle) {
-  const lesComptes = cle === LES_COMPTES;
   /**
-   * **Les trois rubriques de l'exploitation partagent un écran**, et il choisit
-   * laquelle dessiner. Trois modules auraient recopié trois fois l'en-tête, la
-   * phrase du journal des accès et la forme d'un échec — et c'est la troisième
-   * copie qui aurait fini par ne plus dire la même chose (règle 4).
+   * **L'écran se déduit de l'onglet, et non d'une liste de rubriques.**
+   *
+   * Elle était écrite ici, en clair : `[LA_SANTE, LUSAGE, LE_TRAFIC,
+   * LES_CONSULTATIONS]`. C'est la liste qu'on ne relit jamais, et elle a tenu
+   * jusqu'à la rubrique suivante — une rubrique neuve de l'exploitation,
+   * absente de cette liste, serait tombée dans l'écran du carburant : le rail
+   * l'aurait montrée sous *Exploitation*, et le clic aurait dessiné les
+   * domaines de la prédiction (règle 10).
+   *
+   * Chaque rubrique déclare son onglet, et chaque onglet a son écran. Il n'y a
+   * donc plus rien à accorder : ajouter une rubrique au registre suffit.
    */
-  const lexploitation = [LA_SANTE, LUSAGE, LE_TRAFIC, LES_CONSULTATIONS].includes(cle);
+  const onglet = ongletDeLaRubrique(cle);
+  const lesComptes = onglet === ONGLET.UTILISATEURS;
+  const lexploitation = onglet === ONGLET.EXPLOITATION;
 
   hote.innerHTML = `
     <div class="project-rail-layout">

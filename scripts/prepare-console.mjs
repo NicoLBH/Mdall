@@ -155,6 +155,16 @@ export const RACINES = [
   // Les rubriques de la console : une question par rubrique, et l'ordre de la
   // chaîne. Pur, et il n'entraîne rien.
   "js/services/les-rubriques-de-la-console.js",
+  // La justesse des analyses : les quatre outils de mesure, leurs chiffres et
+  // ce que chacun ne sait pas voir. Pur.
+  //
+  // **Il a manqué à cette liste pendant un instant, et rien ne l'a dit.** Le
+  // script a emporté ses 49 modules, le build a rendu zéro, et la page aurait
+  // cherché au premier clic un module absent. C'est l'oubli que cette liste
+  // existe pour rendre visible, et elle ne le rendait pas visible : une épreuve
+  // confronte désormais les imports réels des fichiers de `apps/console/js` à ce
+  // qui est emporté (règle 10).
+  "js/services/la-justesse-de-mdall.js",
   // Le rail commun, celui des Sujets, de la Mémoire et des Actions. La console
   // posait sept blocs à la suite sur une seule page ; elle emploie maintenant
   // la même coque que les écrans de projet, plutôt qu'une navigation à elle qui

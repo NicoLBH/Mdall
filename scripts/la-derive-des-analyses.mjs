@@ -41,6 +41,9 @@ import {
 import {
   unAvis, uneBaseDeCarton, uneLigneDeCompteRendu, uneLigneDeRapport
 } from "./la-derive-des-analyses/une-base-de-carton.js";
+import {
+  MESURE, deposerUnBilan, direLeDepot, ouDeposer
+} from "./la-mesure-des-analyses/le-depot-dun-bilan.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -168,13 +171,40 @@ if (bilan.invariantsTombes) {
 }
 
 /**
+ * **Le dépôt dans la console, et seulement depuis `--serveur`.**
+ *
+ * L'auto-épreuve ne dépose rien, jamais. Elle juge l'instrument sur une matière
+ * fabriquée exprès : déposer son bilan montrerait la justesse de l'instrument
+ * comme celle du produit, et c'est le mensonge le plus confortable de tout cet
+ * outillage — un écran vert obtenu sans avoir lu un seul document (règle 5).
+ *
+ * `MDALL_PROCEDE` nomme le modèle et la version mesurés. Absent, le bilan se
+ * dépose avec un procédé vide, et l'écran le dit « procédé non noté » plutôt que
+ * de le ranger sous un procédé supposé.
+ */
+async function deposerDansLaConsole(quoi, bilan) {
+  const ou = ouDeposer(process.env);
+  if (!ou) { console.log(`\n${direLeDepot(null, { ou })}`); return; }
+
+  for (const un of quoi) {
+    const rendu = await deposerUnBilan({
+      ou, quoi: un, procede: texte(process.env.MDALL_PROCEDE), bilan
+    });
+    console.log(`\n${un} — ${direLeDepot(rendu, { ou })}`);
+  }
+}
+
+/**
  * **Seule l'instabilité fait sortir en échec**, sur vos lectures.
  *
  * Une dérive est attendue : on a touché à la consigne, et l'on vient voir ce que
  * ça change. Une instabilité, non : le même procédé a rendu deux réponses sur le
  * même document, et rien ne se conclut d'une mesure qui ne se répète pas.
  */
-if (surLeServeur) process.exit(bilan.instables ? 1 : 0);
+if (surLeServeur) {
+  await deposerDansLaConsole([MESURE.DERIVE, MESURE.INVARIANTS], bilan);
+  process.exit(bilan.instables ? 1 : 0);
+}
 
 /**
  * L'auto-épreuve, elle, juge **l'outil** : les trois défauts fabriqués doivent

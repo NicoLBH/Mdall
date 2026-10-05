@@ -31,10 +31,37 @@ import {
 import {
   parLeReseau, unLecteurDuServeur
 } from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
+import {
+  MESURE, deposerUnBilan, direLeDepot, ouDeposer
+} from "./la-mesure-des-analyses/le-depot-dun-bilan.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const enPourCent = (part) =>
   (part?.part === null ? "sans objet" : `${(part.part * 100).toFixed(1)} % (${part.combien}/${part.sur})`);
+
+/**
+ * **Le dépôt dans la console, et seulement depuis `--serveur`.**
+ *
+ * L'auto-épreuve ne dépose rien, jamais. Elle juge l'instrument sur une matière
+ * fabriquée exprès : déposer son bilan montrerait la justesse de l'instrument
+ * comme celle du produit, et c'est le mensonge le plus confortable de tout cet
+ * outillage — un écran vert obtenu sans avoir lu un seul document (règle 5).
+ *
+ * `MDALL_PROCEDE` nomme le modèle et la version mesurés. Absent, le bilan se
+ * dépose avec un procédé vide, et l'écran le dit « procédé non noté » plutôt que
+ * de le ranger sous un procédé supposé.
+ */
+async function deposerDansLaConsole(quoi, bilan) {
+  const ou = ouDeposer(process.env);
+  if (!ou) { console.log(`\n${direLeDepot(null, { ou })}`); return; }
+
+  for (const un of quoi) {
+    const rendu = await deposerUnBilan({
+      ou, quoi: un, procede: texte(process.env.MDALL_PROCEDE), bilan
+    });
+    console.log(`\n${un} — ${direLeDepot(rendu, { ou })}`);
+  }
+}
 
 /**
  * Un lecteur qui prend le document du corpus et le passe au lecteur donné.
@@ -93,6 +120,8 @@ if (auServeur) {
     for (const quoi of une[ETAPE.RELEVE].enTrop) console.log(`   ! ${une.document} a inventé « ${quoi} »`);
     for (const quoi of une[ETAPE.MARQUE].fausses) console.log(`   ! ${une.document} — ${quoi}`);
   }
+
+  await deposerDansLaConsole([MESURE.JEU_DE_REFERENCE], bilan);
 
   // Un rappel ou une précision qui n'est pas parfaite est un défaut réel, et
   // non une panne de l'outil : il sort en échec pour qu'un enchaînement le voie.

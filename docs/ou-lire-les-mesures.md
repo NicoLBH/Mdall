@@ -203,3 +203,49 @@ c'est à lui que le chantier appartient.
   hebdomadaire rendrait la courbe régulière et la facture prévisible — mais il
   faut vouloir payer la batterie de perturbations toutes les semaines, et ce
   n'est pas évident.
+
+---
+
+## 6. Ce qui a été fait, et ce que cela a montré
+
+L'écran est en service : **Console › Exploitation › La justesse**. Il lit
+`mesures_de_justesse`, où `deposer_une_mesure` dépose les bilans des quatre
+outils — et seulement depuis `--serveur` : l'auto-épreuve ne dépose rien, parce
+qu'elle mesure deux lecteurs de carton et que son bilan vert se lirait comme
+celui du produit.
+
+Les trois questions tranchées au § 5 l'ont été ainsi :
+
+* **le jeu de référence est commun**, et la table ne porte donc **aucun
+  `project_id`** — la contrainte `bilan_sans_contenu` le refuse même comme clé ;
+* **la courbe n'existe pas encore.** L'écran montre le dernier bilan **par
+  procédé**, et l'historique en tableau. Deux points sous deux procédés
+  différents ne font pas une tendance, et l'écran le dit ;
+* **personne ne lance automatiquement.** C'est dit dans « Ce que cet écran ne
+  dit pas », comme la purge des vingt-six mois que rien n'appelle (règle 12).
+
+### Ce que l'écriture de cet écran a appris
+
+Trois défauts trouvés en le construisant, et aucun n'était visible à la lecture :
+
+1. **`invariantsTombes` vivait sans assiette** dans le bilan de la batterie de
+   perturbations. « 0 invariant tombé » est indiscernable de « aucun invariant
+   posé » — le cas d'une lecture muette, dont tout invariant tient par
+   construction. Exactement le défaut que cet outil existe pour attraper, dans
+   l'outil lui-même. Le bilan rend maintenant les deux.
+2. **`bilan_sans_contenu` ne regarde que les noms de clés.**
+   `{"tombees": "RICT-03 a manqué l'avis A-23"}` la traverse sans difficulté.
+   D'où la deuxième serrure : `deposer_une_mesure` ne garde d'une clé permise que
+   ce qui est **un nombre**. La première ferme les noms, la seconde les types.
+3. **La liste des clés permises portait `secondes` et `appels`**, qu'aucun outil
+   ne produit : du SQL écrit par anticipation, que rien n'appelle (règle 1). Une
+   épreuve confronte désormais les deux côtés — ce que le JavaScript émet et ce
+   que la base garde — parce qu'une clé émise et jetée fait un dépôt qui rend
+   « ok » et une case vide à l'écran. Rien ne tombe nulle part ailleurs.
+
+### La question qui restait, et sa réponse
+
+L'écran répond à **une** des trois questions de justesse, et au tour précédent
+j'avais soutenu que c'était la seule qui mérite un écran. C'était faux comme
+principe : il y en a trois, elles n'ont ni le même lecteur ni le même endroit, et
+les deux autres sont dans le produit. Voir `docs/montrer-le-raisonnement.md`, § 4.

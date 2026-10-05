@@ -37,6 +37,9 @@ import {
 import {
   parLeReseau, unLecteurDuServeur
 } from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
+import {
+  MESURE, deposerUnBilan, direLeDepot, ouDeposer
+} from "./la-mesure-des-analyses/le-depot-dun-bilan.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const LA_MARQUE = { [VERDICT.TIENT]: " ✓ ", [VERDICT.TOMBE]: " ✗ ", [VERDICT.SANS_OBJET]: " · " };
@@ -61,6 +64,32 @@ function leLecteurDemande(arguments_ = []) {
     lire: unLecteurDuServeur({ appeler: parLeReseau({ url, jeton }), projectId: projet }),
     annonce: `LECTEUR DU SERVEUR — projet ${projet}.`
   };
+}
+
+/**
+ * **Le dépôt dans la console, et seulement depuis `--serveur`.**
+ *
+ * L'auto-épreuve ne dépose rien, jamais. Elle mesure deux lecteurs de carton :
+ * déposer son bilan montrerait la justesse de l'instrument comme celle du
+ * produit, et c'est le mensonge le plus confortable de tout cet outillage — un
+ * écran vert obtenu sans avoir lu un seul document (règle 5).
+ *
+ * `MDALL_PROCEDE` nomme le modèle et la version mesurés. Absent, le bilan se
+ * dépose avec un procédé vide, et l'écran le dit « procédé non noté » plutôt que
+ * de le ranger sous un procédé supposé.
+ */
+async function deposerLesDeuxBilans(bilan) {
+  const ou = ouDeposer(process.env);
+  if (!ou) { console.log(`\n${direLeDepot(null, { ou })}`); return; }
+
+  const procede = texte(process.env.MDALL_PROCEDE);
+  // **Deux dépôts, et non un.** Les invariants répondent à une autre question
+  // que les perturbations — « cette lecture est-elle possible » et non « la
+  // lecture suit-elle » —, et les fondre ferait une case de moins à l'écran.
+  for (const quoi of [MESURE.PERTURBATIONS, MESURE.INVARIANTS]) {
+    const rendu = await deposerUnBilan({ ou, quoi, procede, bilan });
+    console.log(`\n${quoi} — ${direLeDepot(rendu, { ou })}`);
+  }
 }
 
 /** Le détail d'un passage, épreuve par épreuve. */
@@ -112,6 +141,8 @@ if (demande) {
   const { epreuves, bilan } = await passerLaBatterie({ corpus, lire: demande.lire });
   raconter(epreuves);
   direLeBilan(bilan);
+
+  await deposerLesDeuxBilans(bilan);
 
   // Ce que la batterie trouve n'est pas une panne de la batterie : elle sort en
   // échec quand une relation tombe, pour qu'un enchaînement s'en aperçoive.
