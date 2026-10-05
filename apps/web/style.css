@@ -29378,10 +29378,20 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
 .suite-avis__ou{color:var(--muted);}
 .suite-avis__constat{flex:1 1 100%;color:var(--muted);overflow-wrap:anywhere;}
 
-/* L'appréciation, en toutes lettres et à la couleur de ce qu'elle implique :
-   une pastille et une majuscule — « ● S » — demandaient de connaître la légende
-   par cœur. Les mots sont ceux de `le-devenir-dun-avis.js`. */
-.suite-avis__appreciation{
+/* ── Un ton ────────────────────────────────────────────────────────────────
+   La pastille qui dit où en est quelque chose : un mot court, encadré, dont la
+   couleur dit si c'est bon, en attente, grave, ou inconnu.
+
+   Elle vivait sous `.suite-avis__appreciation`, chez les avis de bureau de
+   contrôle, et le parcours de démonstration en voulait exactement la même. La
+   recopier sous un second nom aurait demandé de recalibrer les deux à chaque
+   retouche — c'est précisément la peine qu'on cherche à supprimer. Elle est
+   donc mutualisée ici, et `views/ui/un-ton.js` est le seul endroit qui l'écrit.
+
+   `--unknown` n'est pas `--neutral`, et c'est la distinction qui compte : neutre
+   veut dire « sans objet », inconnu veut dire « personne n'a lu ». Les peindre
+   pareil ferait passer une ignorance pour une absence (règle 5). */
+.un-ton{
   display:inline-block;
   border:1px solid currentColor;
   border-radius:6px;
@@ -29390,12 +29400,12 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
   font-weight:700;
   letter-spacing:.02em;
 }
-.suite-avis__appreciation--ok{color:var(--fgColor-success, #3fb950);}
-.suite-avis__appreciation--pending{color:var(--fgColor-attention, #d29922);}
-.suite-avis__appreciation--danger{color:var(--fgColor-danger, #f85149);}
-.suite-avis__appreciation--info{color:var(--fgColor-accent, #58a6ff);}
-.suite-avis__appreciation--neutral,
-.suite-avis__appreciation--unknown{color:var(--muted);}
+.un-ton--ok{color:var(--fgColor-success, #3fb950);}
+.un-ton--pending{color:var(--fgColor-attention, #d29922);}
+.un-ton--danger{color:var(--fgColor-danger, #f85149);}
+.un-ton--info{color:var(--fgColor-accent, #58a6ff);}
+.un-ton--neutral{color:var(--muted);}
+.un-ton--unknown{color:var(--muted);border-style:dashed;}
 
 /* L'en-tête de la frise : son titre, et la sortie vers le suivi complet. */
 .suite-avis__entete{
@@ -29405,3 +29415,96 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
   gap:12px;
   flex-wrap:wrap;
 }
+
+/* ── Le parcours de démonstration ──────────────────────────────────────────
+   Les sept étapes de la chaîne, dans l'ordre, chacune menant à son écran réel.
+
+   Les tons des états viennent de `.un-ton` — mutualisé avec les appréciations
+   d'avis —, et la numérotation reprend le dessin de la frise des avis : un trait
+   relie les étapes, sauf après la dernière. Deux dessins pour la même idée
+   auraient demandé de recalibrer les deux à chaque retouche. */
+.parcours{display:flex;flex-direction:column;gap:16px;}
+.parcours__entete h3{margin:0 0 4px;}
+
+.parcours__barre{display:flex;align-items:center;gap:12px;}
+.parcours__compte{font-weight:600;}
+/* Le compte à gauche, le bouton à droite : le même partage que l'en-tête
+   d'Analyse de documents. */
+.parcours__pousse{margin-left:auto;width:auto;flex:0 0 auto;}
+
+.parcours__etapes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;}
+
+.parcours__etape{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:14px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
+/* La prochaine se voit sans se crier : c'est la seule qu'on puisse franchir
+   maintenant, et il n'y en a jamais qu'une. */
+.parcours__etape--prochaine{border-color:var(--fgColor-accent, #58a6ff);}
+
+.parcours__tete{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.parcours__rang{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:22px;
+  height:22px;
+  border:1px solid var(--border);
+  border-radius:50%;
+  font-size:11.5px;
+  font-weight:700;
+  color:var(--muted);
+}
+.parcours__etape--prochaine .parcours__rang{
+  border-color:var(--fgColor-accent, #58a6ff);
+  color:var(--fgColor-accent, #58a6ff);
+}
+.parcours__titre{margin:0;font-size:14px;min-width:0;}
+.parcours__cran{color:var(--muted);}
+.parcours__question{margin:0;color:var(--text);}
+
+.parcours__dit{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:12.5px;}
+.parcours__dit dt{color:var(--muted);white-space:nowrap;}
+.parcours__dit dd{margin:0;overflow-wrap:anywhere;}
+/* Ce qu'une étape ne montre pas se lit comme le reste, et non en petit en bas :
+   c'est la moitié de son information (règle 3). */
+.parcours__creux{font-style:italic;}
+.parcours__dit dd.parcours__creux{color:var(--muted);}
+
+.parcours__pied{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.parcours__eteint{display:inline-flex;align-items:center;gap:6px;color:var(--muted);}
+.parcours__ou{margin-left:auto;color:var(--muted);}
+
+.parcours__creux-du-tout{
+  padding-top:12px;
+  border-top:1px solid var(--border);
+}
+.parcours__creux-du-tout h4{margin:0 0 6px;font-size:13px;color:var(--muted);}
+
+/* ── Ce qui attend une proposition ─────────────────────────────────────────
+   Sous le tableau d'Analyse de documents : combien de documents lus n'ont pas
+   encore été emportés, et le geste qui les emporterait.
+
+   Le même partage que l'en-tête du tableau : ce qui décrit à gauche, ce qui agit
+   à droite, un flex au milieu. Deux barres de la même page qui pousseraient
+   différemment se verraient. */
+.documents-attente{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--border);
+}
+.documents-attente__dit{flex:1 1 320px;min-width:0;}
+.documents-attente__phrase{margin:0;font-weight:600;}
+.documents-attente__familles{margin:2px 0 0;color:var(--muted);}
+/* La phrase qui dit que le geste n'est pas branché passe sous le bouton, sur
+   toute la largeur : à côté, elle se serait lue comme son sous-titre. */
+.documents-attente__pas-branche{flex:1 1 100%;margin:0;color:var(--muted);}

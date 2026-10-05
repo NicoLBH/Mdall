@@ -1,5 +1,7 @@
 import { store } from "../store.js";
-import { ORIGINE, executionsAGarder, lorigineDunGeste } from "./run-partition.js";
+import {
+  ORIGINE, executionsAGarder, lissueDUneAnalyse, lorigineDunGeste, uneAnalyseEstVive
+} from "./run-partition.js";
 import { estUnDepotAbouti, phraseDuDepot } from "./le-mot-dun-depot.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import {
@@ -900,13 +902,20 @@ function mapDocumentRowToViewModel(row = {}) {
 function mapRunRowToLogEntry(row = {}) {
   const startedAt = row.started_at || row.created_at || new Date().toISOString();
   const endedAt = row.finished_at || null;
-  const lifecycleStatus = String(row.status || "queued").toLowerCase() === "running"
-    ? "running"
-    : "completed";
+  /**
+   * **« En file d'attente » n'est pas « terminé », et la règle vit ailleurs.**
+   *
+   * On ne retenait `running` que pour lui-même, et tout le reste — `queued`
+   * compris — devenait `completed`. Une analyse qui attend s'affichait donc
+   * comme finie, et le battement du journal ne partait jamais.
+   *
+   * Ce qui compte comme vif est dit dans `run-partition.js`, où vivent déjà
+   * `quelqueChoseTourne` et le battement : deux définitions du vivant auraient
+   * fini par ne pas dire la même chose (règle 4).
+   */
+  const lifecycleStatus = uneAnalyseEstVive(row.status) ? "running" : "completed";
 
-  const outcomeStatus = String(row.status || "").toLowerCase() === "succeeded"
-    ? "success"
-    : (["failed", "canceled"].includes(String(row.status || "").toLowerCase()) ? "error" : null);
+  const outcomeStatus = lissueDUneAnalyse(row.status);
 
   const documentMeta = Array.isArray(row.documents) ? row.documents[0] : row.documents;
   const documentName = safeString(documentMeta?.original_filename || documentMeta?.filename || "");

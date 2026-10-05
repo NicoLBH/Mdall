@@ -37,6 +37,7 @@
  * il a cessé de paraître, ce qui est une question, pas une réponse.
  */
 
+import { leJourDeLaSource } from "./la-chronologie-des-sources.js";
 import { leSensDeLaMarque } from "./la-lecture-dun-rapport.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -143,7 +144,20 @@ function uneLecture(ligne) {
     id: texte(ligne?.id),
     document: texte(ligne?.document) || texte(gelee?.nom),
     numero: texte(ligne?.numero_de_rapport),
+    /**
+     * **Les mots du document**, tels qu'il les écrit, pour l'affichage.
+     *
+     * C'est ce que la frise montre, et c'est ce qu'on retrouve en ouvrant le
+     * PDF. Le remplacer par une date ISO ferait chercher « 2025-03-28 » dans un
+     * document qui dit « 28/03/2025 ».
+     */
     etabliLe: texte(ligne?.etabli_le),
+    /**
+     * **Le même jour, rangeable.** Il ne s'affiche jamais : il ne sert qu'à
+     * mettre les rapports dans l'ordre. Les deux vivent côte à côte parce
+     * qu'aucun des deux ne fait le travail de l'autre.
+     */
+    jour: leJourDeLaSource(ligne?.etabli_le),
     legende: liste(ligne?.legende).length ? ligne.legende : liste(gelee?.legende),
     avis
   };
@@ -156,17 +170,40 @@ function uneLecture(ligne) {
  * rapport après un récent tous les jours ; suivre l'ordre des lectures ferait
  * « lever » un avis par un rapport antérieur à celui qui l'avait soulevé.
  *
- * Une lecture sans date d'émission ne peut pas se placer : elle est écartée de la
- * frise et comptée à part — l'insérer au hasard fabriquerait une suite fausse, et
- * la taire ferait croire que le dossier est complet (règle 5).
+ * ## Et la date d'émission est écrite dans les mots du document
+ *
+ * `etabli_le` porte ce que le rapport dit de lui-même : « 28/03/2025 ». Cette
+ * suite se rangeait en **comparant ces mots comme du texte**, c'est-à-dire par
+ * le jour du mois d'abord. Six rapports de ce chantier se classaient ainsi :
+ *
+ *     16/04/2025 · 20/12/2024 · 23/01/2025 · 24/01/2025 · 25/11/2024 · 28/03/2025
+ *
+ * là où la chronologie est :
+ *
+ *     25/11/2024 · 20/12/2024 · 23/01/2025 · 24/01/2025 · 28/03/2025 · 16/04/2025
+ *
+ * Et comme c'est cet ordre qui décide de `LEVE` et de `ROUVERT`, **un avis levé
+ * en avril se rouvrait par un rapport de décembre**, qui était pourtant le plus
+ * ancien. Le défaut ne se voyait pas : chaque date s'affichait juste.
+ *
+ * `leJourDeLaSource` sait déjà lire les deux écritures qui circulent — l'ISO de
+ * la base et le français du document — et porte cette leçon dans son propre
+ * commentaire depuis qu'elle a été payée ailleurs. Il manquait seulement
+ * qu'elle arrive ici (règle 10).
+ *
+ * Une lecture sans date d'émission **lisible** ne peut pas se placer : elle est
+ * écartée de la frise et comptée à part — l'insérer au hasard fabriquerait une
+ * suite fausse, et la taire ferait croire que le dossier est complet (règle 5).
+ * Une date écrite d'une façon qu'on ne sait pas lire tombe donc du même côté
+ * qu'une date absente, ce qui est exact : on ne sait pas quand.
  */
 export function lesRapportsEnOrdre(lignes = []) {
   const lues = liste(lignes).map(uneLecture);
 
   return {
-    dates: lues.filter((une) => une.etabliLe)
-      .sort((une, autre) => une.etabliLe.localeCompare(autre.etabliLe)),
-    sansDate: lues.filter((une) => !une.etabliLe)
+    dates: lues.filter((une) => une.jour)
+      .sort((une, autre) => une.jour.localeCompare(autre.jour)),
+    sansDate: lues.filter((une) => !une.jour)
   };
 }
 
