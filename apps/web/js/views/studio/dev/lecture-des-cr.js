@@ -69,12 +69,17 @@ import {
   CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, LE_MENU_DU_TRI, OUVRIR_UN_DOCUMENT,
   TRIER_LES_DOCUMENTS, laFamilleDesignee,
   leDocumentDesigne,
+  PORTER_LE_LOT, RELIRE_LA_PROPOSITION,
   renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "../../ui/les-documents-analyses.js";
 import {
   FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses, lesDocumentsDuTableau,
-  lesDocumentsEnAttente
+  lesDocumentsEnAttente, parFamille
 } from "../../../services/les-documents-analyses.js";
+import {
+  ceQuUneSeulePropositionPorterait
+} from "../../../services/ce-qui-attend-une-proposition.js";
+import { leBilanDuLot } from "../../../services/la-propo-dun-lot.js";
 import {
   ceQueLaZoneDit, laFamilleQuiSeLit, leGesteDeLaLectureDirecte
 } from "../../../services/les-familles-de-document.js";
@@ -518,6 +523,18 @@ function unEtatNeuf() {
      */
     tri: "",
     /**
+     * Où en est le portage du lot dans une proposition — `null` au repos.
+     *
+     * `{enCours, etape, bilan, proposition, raison}`. Il vit ici et non dans le
+     * DOM : la composition d'un lot de douze documents dure une minute, pendant
+     * laquelle l'écran se redessine à chaque étape.
+     *
+     * **Il ne survit pas à un changement de projet** : `unEtatNeuf` le remet à
+     * `null`, et c'est voulu — le bilan d'un chantier affiché sur un autre
+     * ferait lire ses chiffres sur le mauvais.
+     */
+    portage: null,
+    /**
      * Les lectures lancées qui ne sont pas revenues.
      *
      * `[]` et non `null` : une file qu'on n'a pas su lire ne doit pas empêcher le
@@ -893,6 +910,105 @@ async function lesAnalysesEntieres(projet) {
 }
 
 /** Écrire le fichier de diagnostic, analyses comprises. */
+/**
+ * Porter le lot dans une seule proposition.
+ *
+ * ## Il refait le lot avant de partir
+ *
+ * Le bouton a été dessiné sur l'état d'il y a quelques secondes. Entre-temps
+ * une lecture a pu revenir, ou une autre fenêtre a pu en porter une. On
+ * recompose donc le lot au moment du clic, sur le tableau courant — sans quoi on
+ * porterait une liste périmée, et la plus mauvaise façon de se tromper est de
+ * reverser ce qui vient d'être versé.
+ *
+ * ## Il se refuse à lui-même un second départ
+ *
+ * Deux portages du même lot en parallèle ouvriraient deux propositions, chacune
+ * avec la moitié des lignes. `portage.enCours` est la garde, et l'écran éteint
+ * le bouton — mais la garde est ici, parce qu'un bouton éteint se reclique au
+ * clavier.
+ */
+async function porterLeLot(hote) {
+  if (etat.portage?.enCours) return;
+
+  const documents = lesDocumentsDeLaVue(etat);
+  const porterait = ceQuUneSeulePropositionPorterait(
+    parFamille(documents ?? [], etat.famille), etat.famille
+  );
+  if (!porterait.peut) return;
+
+  etat.portage = { enCours: true, etape: null, bilan: null, proposition: null, raison: "" };
+  redessiner(hote);
+
+  const projectId = texte(await projetCourant());
+
+  try {
+    const { porterLeLotDansUneProposition } = await import(
+      "../../../services/la-propo-dun-lot-supabase.js"
+    );
+
+    const rendu = await porterLeLotDansUneProposition({
+      projectId,
+      lot: porterait.lot,
+      // Chaque étape redessine : un lot de douze documents prend une minute, et
+      // un écran muet pendant une minute passe pour un écran bloqué.
+      surEtape: (etape) => {
+        etat.portage = { ...etat.portage, etape };
+        redessiner(hote);
+      }
+    });
+
+    etat.portage = {
+      enCours: false,
+      etape: null,
+      bilan: rendu.bilan,
+      proposition: rendu.proposition ?? null,
+      raison: texte(rendu.raison)
+    };
+  } catch (erreur) {
+    /**
+     * **Un bilan quand même, et le motif dedans.**
+     *
+     * Sans lui, l'écran reviendrait au repos comme si rien ne s'était passé —
+     * alors que des lectures ont peut-être été marquées, et qu'un second clic
+     * ne reprendrait pas les mêmes. Le dire est la seule façon de ne pas faire
+     * douter du compteur (règle 5).
+     */
+    etat.portage = {
+      enCours: false,
+      etape: null,
+      bilan: leBilanDuLot([]),
+      proposition: null,
+      raison: `La composition s'est arrêtée : ${texte(erreur?.message) || "cause inconnue"}.`
+    };
+  }
+
+  /**
+   * **Le tableau se relit.** Les lectures portées ont reçu leur marque en base,
+   * et le compteur de ce qui attend doit descendre — sinon on recliquerait sur
+   * un lot déjà porté.
+   */
+  await chargerLesLecturesGardees(hote);
+  if (hote?.isConnected) redessiner(hote);
+}
+
+/**
+ * Aller relire la proposition que le lot vient d'ouvrir.
+ *
+ * **Le même chemin que depuis un document** : `pendingPropositionId` dit à
+ * l'onglet Propositions laquelle ouvrir, et l'adresse change pour y aller. Deux
+ * chemins vers la même proposition auraient fini par ne plus l'ouvrir pareil
+ * (règle 10).
+ */
+function allerRelireLaProposition(propositionId) {
+  const vise = texte(propositionId);
+  if (!vise) return;
+
+  store.pendingPropositionId = vise;
+  const projet = texte(store.currentProjectId);
+  if (projet) window.location.hash = `#project/${projet}/propositions`;
+}
+
 async function exporterTout() {
   // **Le chantier se demande, il n'est pas dans l'état.** Cet écran ne le garde
   // pas ; `projetCourant()` est la façon dont tout le reste du module le lit, et
@@ -1106,7 +1222,8 @@ function renderLesDocumentsAnalyses(vue) {
     rate: vue.dejaLusRate === true,
     ouverte: texte(vue.ouvertureEnCours),
     filtre: texte(vue.filtre),
-    tri: texte(vue.tri)
+    tri: texte(vue.tri),
+    portage: vue.portage ?? null
   });
 }
 
@@ -3709,6 +3826,22 @@ function brancher(hote) {
      */
     if (cible.closest(`[${TOUT_EXPORTER}]`)) {
       void exporterTout();
+      return;
+    }
+
+    /**
+     * **Porter le lot dans une seule proposition**, et aller la relire.
+     *
+     * Les deux gestes sont ici parce qu'ils vivent dans le même bloc de
+     * l'écran : celui qui dit ce qui attend, puis ce que ça a donné.
+     */
+    const duLot = cible.closest("[data-attente-action]");
+    if (duLot) {
+      const quoi = texte(duLot.getAttribute("data-attente-action"));
+      if (quoi === PORTER_LE_LOT) void porterLeLot(hote);
+      if (quoi === RELIRE_LA_PROPOSITION) {
+        allerRelireLaProposition(texte(duLot.getAttribute("data-attente-proposition")));
+      }
       return;
     }
 

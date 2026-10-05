@@ -46,6 +46,7 @@
  */
 
 import { TOUTES, ceQueDitLaFamille } from "./les-familles-de-document.js";
+import { laFamilleSeTranscrit } from "./la-propo-dun-lot.js";
 import { OU_EN_EST } from "./les-documents-analyses.js";
 import { lePluriel } from "./lexploitation-de-mdall.js";
 import { leJourDeLaSource } from "./la-chronologie-des-sources.js";
@@ -66,7 +67,15 @@ export const POURQUOI_PAS_DE_LOT = {
   /** Tout ce qui a été lu est déjà parti dans une proposition. */
   DEJA_TOUT_VERSE: "deja_tout_verse",
   /** Ce qui attend n'est pas rattaché à un document de Fichiers. */
-  SANS_DOCUMENT: "sans_document"
+  SANS_DOCUMENT: "sans_document",
+  /**
+   * Ce qui attend est d'une famille qu'on ne sait pas encore transcrire.
+   *
+   * **Un refus à part**, et non fondu dans « rien de lu » : les fils ont bien
+   * été lus, et l'écran montre leur relevé. Ce qui manque est la transcription
+   * en affirmations, et c'est une autre phrase et une autre attente.
+   */
+  SANS_TRANSCRIPTION: "sans_transcription"
 };
 
 export const CE_QUE_LE_REFUS_DIT = {
@@ -77,13 +86,17 @@ export const CE_QUE_LE_REFUS_DIT = {
     + "ouvertes attendent une signature, dans l'onglet Propositions.",
   [POURQUOI_PAS_DE_LOT.SANS_DOCUMENT]:
     "Ce qui attend n'est rattaché à aucun document de Fichiers : une proposition "
-    + "ne pourrait pas citer la page d'où chaque ligne sort."
+    + "ne pourrait pas citer la page d'où chaque ligne sort.",
+  [POURQUOI_PAS_DE_LOT.SANS_TRANSCRIPTION]:
+    "Ce qui attend est d'une famille qu'on ne sait pas encore transcrire en "
+    + "affirmations. Ces documents ont bien été lus : leur relevé se voit en "
+    + "ouvrant chacun."
 };
 
 /**
  * Une lecture attend-elle une proposition ?
  *
- * Trois conditions, et les trois sont nécessaires :
+ * Quatre conditions, et les quatre sont nécessaires :
  *
  *  1. **elle est analysée** — un document en attente ou en échec n'a rien à
  *     verser, et l'inclure ferait un lot dont une partie ne porterait rien ;
@@ -91,12 +104,21 @@ export const CE_QUE_LE_REFUS_DIT = {
  *     dernière » ;
  *  3. **elle cite un document de Fichiers** — sans lui, une ligne de la
  *     proposition ne pourrait pas se vérifier, et une affirmation qui ne se
- *     vérifie pas n'a rien à faire dans la mémoire.
+ *     vérifie pas n'a rien à faire dans la mémoire ;
+ *  4. **sa famille se transcrit** — un fil de messagerie garde des prises de
+ *     position que rien ne transcrit encore en affirmations. Le faire entrer
+ *     dans un lot le marquerait comme porté sans qu'il ait rien porté, et il
+ *     disparaîtrait du compteur sans être passé nulle part (règle 5).
+ *
+ * La quatrième se lit dans `la-propo-dun-lot.js`, là où la transcription vit :
+ * la recopier ici en ferait un second avis sur ce qu'une famille sait donner,
+ * et le premier à changer gagnerait (règle 4).
  */
 export function attendUneProposition(document = null) {
   if (!document || typeof document !== "object") return false;
   if (texte(document.ou) !== OU_EN_EST.ANALYSE) return false;
   if (texte(document.propositionId)) return false;
+  if (!laFamilleSeTranscrit(texte(document.famille))) return false;
   return Boolean(texte(document.documentId));
 }
 
@@ -110,7 +132,22 @@ export function attendUneProposition(document = null) {
 export function lesLecturesSansDocument(documents = []) {
   return liste(documents).filter((un) => texte(un?.ou) === OU_EN_EST.ANALYSE
     && !texte(un?.propositionId)
+    && laFamilleSeTranscrit(texte(un?.famille))
     && !texte(un?.documentId));
+}
+
+/**
+ * Ce qui a été lu, n'a pas de proposition, et dont la famille ne se transcrit pas.
+ *
+ * **Compté à part aussi.** Ce ne sont ni des lectures ratées ni des lectures
+ * vides : elles ont abouti, et l'écran montre ce qu'elles ont relevé. Ce qui
+ * manque est en aval — personne n'a encore écrit comment un fil devient une
+ * affirmation.
+ */
+export function lesLecturesSansTranscription(documents = []) {
+  return liste(documents).filter((un) => texte(un?.ou) === OU_EN_EST.ANALYSE
+    && !texte(un?.propositionId)
+    && !laFamilleSeTranscrit(texte(un?.famille)));
 }
 
 /**
@@ -158,6 +195,7 @@ export function ceQuUneSeulePropositionPorterait(documents = [], famille = TOUTE
   const tous = liste(documents);
   const lot = leLotQuiAttend(tous, famille);
   const sansDocument = lesLecturesSansDocument(tous);
+  const sansTranscription = lesLecturesSansTranscription(tous);
 
   const analysees = tous.filter((un) => texte(un?.ou) === OU_EN_EST.ANALYSE);
 
@@ -173,6 +211,15 @@ export function ceQuUneSeulePropositionPorterait(documents = [], famille = TOUTE
   if (lot.length === 0) {
     if (analysees.length === 0) pourquoiPas = POURQUOI_PAS_DE_LOT.RIEN_DE_LU;
     else if (sansDocument.length > 0) pourquoiPas = POURQUOI_PAS_DE_LOT.SANS_DOCUMENT;
+    /**
+     * **Avant « déjà tout versé », et après « sans document ».**
+     *
+     * Un chantier qui n'a lu que des fils n'a rien versé du tout : annoncer que
+     * tout est parti enverrait chercher une proposition qui n'existe pas. Mais
+     * un document sans rattachement est un défaut plus proche de l'action — on
+     * peut le ranger dans Fichiers —, donc il passe devant.
+     */
+    else if (sansTranscription.length > 0) pourquoiPas = POURQUOI_PAS_DE_LOT.SANS_TRANSCRIPTION;
     else pourquoiPas = POURQUOI_PAS_DE_LOT.DEJA_TOUT_VERSE;
   }
 
@@ -193,6 +240,7 @@ export function ceQuUneSeulePropositionPorterait(documents = [], famille = TOUTE
      */
     sansDate: lot.filter((un) => !leJourDeLaSource(un.quand)).length,
     sansDocument: sansDocument.length,
+    sansTranscription: sansTranscription.length,
     du: jours[0] ?? "",
     au: jours[jours.length - 1] ?? "",
     peut: lot.length > 0,
