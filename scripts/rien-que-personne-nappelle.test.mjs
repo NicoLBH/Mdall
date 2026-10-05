@@ -74,7 +74,23 @@ const LES_MODULES_SOUS_GARDE = [
   "apps/web/js/services/la-file-dun-geste.js",
   // Le registre des familles, et le lancement d'une lecture quelle qu'elle soit.
   "apps/web/js/services/les-familles-de-document.js",
-  "apps/web/js/services/lancer-une-lecture.js"
+  "apps/web/js/services/lancer-une-lecture.js",
+  /**
+   * La batterie de perturbations.
+   *
+   * **Un outil de mesure est le pire endroit où laisser du code mort** : on le
+   * lance rarement, on en lit la sortie et non la source, et un module que rien
+   * n'appelle y vit des années sans qu'on s'en aperçoive. Les huit y entrent
+   * donc dès leur livraison.
+   */
+  "scripts/la-batterie-des-perturbations/les-perturbations.js",
+  "scripts/la-batterie-des-perturbations/lempreinte-dune-lecture.js",
+  "scripts/la-batterie-des-perturbations/la-relation.js",
+  "scripts/la-batterie-des-perturbations/les-invariants.js",
+  "scripts/la-batterie-des-perturbations/passer-la-batterie.js",
+  "scripts/la-batterie-des-perturbations/le-corpus.js",
+  "scripts/la-batterie-des-perturbations/un-lecteur-de-carton.js",
+  "scripts/la-batterie-des-perturbations/un-lecteur-du-serveur.js"
 ];
 
 /** Où l'on cherche les appels. Les tests n'en sont pas : ils appellent tout. */
