@@ -298,3 +298,89 @@ test("une lecture tirée de la base se lit comme une lecture gelée", () => {
 
   assert.deepEqual(parLaColonne.avis, parLanalyse.avis);
 });
+
+/* ── La date d'émission est écrite dans les mots du document ────────────────── */
+
+test("les rapports se rangent par chronologie, et non par le jour du mois", () => {
+  /**
+   * **Le défaut qu'on cherche ici ne se voit sur aucun écran.** Chaque date
+   * s'affiche juste ; c'est leur *ordre* qui était faux, parce qu'on comparait
+   * « 28/03/2025 » à « 16/04/2025 » comme du texte — c'est-à-dire par le jour
+   * du mois d'abord.
+   *
+   * Les six dates sont celles d'un chantier réel, et elles sont choisies pour
+   * que l'ordre textuel ne ressemble en rien à l'ordre du calendrier.
+   */
+  const { dates, sansDate } = lesRapportsEnOrdre([
+    unRapport("A", "28/03/2025", []),
+    unRapport("B", "16/04/2025", []),
+    unRapport("C", "20/12/2024", []),
+    unRapport("D", "23/01/2025", []),
+    unRapport("E", "24/01/2025", []),
+    unRapport("F", "25/11/2024", [])
+  ]);
+
+  assert.deepEqual(
+    dates.map((un) => un.numero),
+    ["F", "C", "D", "E", "A", "B"],
+    "25/11/2024 → 20/12/2024 → 23/01/2025 → 24/01/2025 → 28/03/2025 → 16/04/2025"
+  );
+  assert.deepEqual(sansDate, [], "ces six dates se lisent toutes");
+});
+
+test("la frise garde les mots du document, et range sur le jour", () => {
+  // La date affichée reste celle qu'on retrouvera en ouvrant le PDF. Rendre
+  // « 2025-03-28 » ferait chercher dans le document une date qu'il n'écrit pas.
+  const { dates } = lesRapportsEnOrdre([unRapport("A", "28/03/2025", [])]);
+  assert.equal(dates[0].etabliLe, "28/03/2025");
+  assert.equal(dates[0].jour, "2025-03-28");
+});
+
+test("les deux écritures se mélangent sans se déclasser", () => {
+  // La base range en ISO, le document parle français : les deux arrivent dans
+  // la même colonne, et il n'y a aucune raison de les séparer.
+  const { dates } = lesRapportsEnOrdre([
+    unRapport("A", "28/03/2025", []),
+    unRapport("B", "2024-12-20", []),
+    unRapport("C", "16/04/2025", [])
+  ]);
+  assert.deepEqual(dates.map((un) => un.numero), ["B", "A", "C"]);
+});
+
+test("un avis levé ne se rouvre pas par un rapport plus ancien", () => {
+  /**
+   * **C'est le défaut tel qu'il se montrait.** Trois rapports : l'avis est
+   * suspendu en novembre, encore suspendu en mars, levé en avril. En ordre
+   * textuel, avril passait **avant** novembre — l'avis se levait d'abord, puis
+   * se « rouvrait » par le rapport le plus ancien du dossier, et la frise
+   * annonçait un point rouvert que personne n'avait rouvert.
+   */
+  const suite = laSuiteDesAvis([
+    unRapport("A", "25/11/2024", [unAvis("A-12", "S")]),
+    unRapport("B", "28/03/2025", [unAvis("A-12", "S")]),
+    unRapport("C", "16/04/2025", [unAvis("A-12", "F")])
+  ]);
+
+  const [avis] = suite.avis;
+  assert.equal(avis.vie, LA_VIE_DUN_AVIS.FERME, "le dernier mot est celui d'avril");
+  assert.deepEqual(
+    avis.etapes.map((une) => une.apporte),
+    [
+      CE_QUE_LE_RAPPORT_APPORTE.NEUF,
+      CE_QUE_LE_RAPPORT_APPORTE.RAPPEL,
+      CE_QUE_LE_RAPPORT_APPORTE.LEVE
+    ],
+    "neuf en novembre, rappelé en mars, levé en avril — et rien de rouvert"
+  );
+});
+
+test("une date écrite d'une façon qu'on ne sait pas lire se compte à part", () => {
+  // Et non rangée au hasard : « on ne sait pas quand » tombe du même côté que
+  // « il n'y a pas de date », ce qui est exactement ce qu'on sait (règle 5).
+  const { dates, sansDate } = lesRapportsEnOrdre([
+    unRapport("A", "mars 2025", []),
+    unRapport("B", "16/04/2025", [])
+  ]);
+  assert.deepEqual(dates.map((un) => un.numero), ["B"]);
+  assert.deepEqual(sansDate.map((un) => un.numero), ["A"]);
+});

@@ -1103,12 +1103,22 @@ function reglerLeBattement() {
 }
 
 /**
- * Re-cliquer l'onglet « Actions » revient au journal.
+ * Re-cliquer l'onglet « Actions » revient au journal, **et relit la base**.
  *
  * Le même geste que pour les sujets et les propositions : l'onglet ramène chez
  * lui, et c'est pour cela qu'il n'y a plus de bouton de retour dans le détail.
  * Le lien de l'onglet actif ne change pas l'adresse, donc aucun `hashchange`
  * n'a lieu : cet événement est le seul signal disponible.
+ *
+ * ## Pourquoi il relit maintenant
+ *
+ * Il ne faisait que refermer le détail, et **ne faisait rien du tout** quand on
+ * était déjà sur le journal : le seul geste par lequel on dit « montre-moi où
+ * ça en est » n'avait aucun effet. Le battement couvre le cas où une exécution
+ * est déjà reconnue vive ; il ne couvre pas celui où elle ne l'est pas encore,
+ * ni celui d'un travail dont la ligne vient d'être posée ailleurs. Re-cliquer
+ * l'onglet est le geste de rafraîchissement de l'écran, et il doit donc en
+ * être un.
  *
  * L'écran est reconstruit à chaque navigation ; l'écouteur lit donc l'écran
  * monté, jamais celui qu'il avait sous la main le jour où il a été posé.
@@ -1116,6 +1126,31 @@ function reglerLeBattement() {
 let tabResetBound = false;
 let mountedRoot = null;
 let ecouteDuJournal = null;
+
+/**
+ * Une relecture à la fois.
+ *
+ * Re-cliquer trois fois de suite lancerait trois requêtes dont les deux
+ * premières ne serviraient à rien, et dont la dernière arrivée gagnerait — ce
+ * qui n'est pas forcément la plus récente.
+ */
+let relectureEnVol = false;
+
+async function relireLeJournal() {
+  if (relectureEnVol) return;
+  relectureEnVol = true;
+  try {
+    await syncProjectActionsFromSupabase({ force: true });
+  } catch (erreur) {
+    console.warn("syncProjectActionsFromSupabase failed", erreur);
+  } finally {
+    relectureEnVol = false;
+  }
+  // L'écran a pu être quitté pendant la lecture : entre le clic et la réponse,
+  // il s'écoule le temps d'un autre clic.
+  if (!mountedRoot?.isConnected) return;
+  renderProjectActionsContent(mountedRoot);
+}
 
 /**
  * Le journal se redessine quand une exécution bouge.
@@ -1152,11 +1187,17 @@ function bindTabReset() {
   window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (event) => {
     if (String(event?.detail?.tabId || "") !== "actions") return;
     if (!mountedRoot?.isConnected) return;
-    if (!store.projectActionsView?.openRunId) return;
 
-    store.projectActionsView.openRunId = "";
-    store.projectActionsView.openStepId = "";
-    renderProjectActionsContent(mountedRoot);
+    // **Refermer le détail d'abord, relire ensuite.** L'inverse montrerait le
+    // détail d'une exécution pendant le temps de la requête, puis sauterait au
+    // journal : on aurait l'air d'avoir cliqué deux fois.
+    if (store.projectActionsView?.openRunId) {
+      store.projectActionsView.openRunId = "";
+      store.projectActionsView.openStepId = "";
+      renderProjectActionsContent(mountedRoot);
+    }
+
+    void relireLeJournal();
   });
 }
 

@@ -33,6 +33,7 @@ import { renderIncendieHabitation } from "./studio/incendie/incendie-habitation.
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
+import { renderLeParcours } from "./studio/dev/le-parcours.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
 import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
 import { renderEcrireEnMdallEcran, reprendreLutilitaire } from "./studio/dev/ecrire-en-mdall.js";
@@ -195,6 +196,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="seismic-general">
                 <div id="projectStudioSeismicGeneralPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="dev-le-parcours">
+                <div id="projectStudioLeParcoursPanel"></div>
+              </section>
               <section class="project-studio-router__panel" data-side-nav-panel="dev-ct-continuity-lab">
                 <div id="projectStudioCtContinuityLabPanel"></div>
               </section>
@@ -251,6 +255,7 @@ export function renderProjectStudio(root) {
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
+  const leParcoursRoot = root.querySelector("#projectStudioLeParcoursPanel");
   const lectureCrRoot = root.querySelector("#projectStudioLectureCrPanel");
   const ecrireEnMdallRoot = root.querySelector("#projectStudioEcrireEnMdallPanel");
   const lectureMailsRoot = root.querySelector("#projectStudioLectureMailsPanel");
@@ -289,6 +294,7 @@ export function renderProjectStudio(root) {
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
   if (ctContinuityLabRoot) renderCtContinuityLab(ctContinuityLabRoot);
+  if (leParcoursRoot) renderLeParcours(leParcoursRoot);
   // **La lecture se dessine au montage, comme les autres.** Elle ne le faisait
   // qu'à la venue, au motif qu'elle n'a rien à montrer tant qu'aucun document
   // n'est déposé. C'était faux dès qu'on revenait à l'Atelier pendant une
@@ -421,6 +427,17 @@ export function renderProjectStudio(root) {
     // niveau du module, donc un document déjà lu se retrouve tel qu'on l'a
     // laissé — redéposer serait repayer un appel.
     if (targetId === "dev-lecture-cr" && lectureCrRoot) renderLectureDesCr(lectureCrRoot);
+    /**
+     * **Le parcours se relit à chaque venue, et c'est son intérêt.**
+     *
+     * On y revient précisément après avoir franchi une étape — on vient de
+     * signer, on vient de lire un document — et c'est l'étape suivante qu'on
+     * veut voir s'allumer. Un parcours figé sur l'état du premier passage dirait
+     * « à faire » de ce qu'on vient de faire (règle 6).
+     */
+    if (targetId === "dev-le-parcours" && leParcoursRoot) {
+      renderLeParcours(leParcoursRoot, { force: true });
+    }
     // Le brouillon **ne se redessine pas** à la venue : il vit au niveau du
     // module, et le refaire effacerait ce qu'on est en train d'écrire. C'est
     // l'inverse des écrans qui lisent la mémoire — eux doivent se rafraîchir,

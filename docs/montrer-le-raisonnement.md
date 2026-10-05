@@ -271,17 +271,58 @@ en « Les preuves ».
 > renommage cherchait à obtenir — qu'on sache ce qu'on regarde — s'obtient par
 > ce que les onglets **contiennent**, c'est-à-dire par les tours 2 et 4.
 
-### Tour 6 — Le parcours de démonstration
+### Tour 6 — Le parcours de démonstration — ✔ livré
 
-Un chemin unique, qui se fait en cinq minutes sur un corpus inventé, et qui
-raconte la chaîne entière dans l'ordre : verser un PDF → voir les quatre crans →
-lire le Mdall → lire les preuves → signer → retrouver dans la mémoire → voir la
-prédiction qui en découle.
+Un chemin unique, qui raconte la chaîne entière dans l'ordre : verser un PDF →
+voir les quatre crans → lire le Mdall → lire les preuves → signer → retrouver
+dans la mémoire → voir la prédiction qui en découle.
 
-Ce n'est pas une démo scriptée : ce sont les écrans réels, sur le corpus de
-démonstration, avec à chaque étape une phrase qui dit *où l'on en est dans la
-chaîne*. C'est ce qui permet de répondre à la question difficile en montrant
-plutôt qu'en argumentant.
+Ce n'est pas une démo scriptée : ce sont les écrans réels, sur le chantier
+ouvert, avec à chaque étape une phrase qui dit *où l'on en est dans la chaîne*.
+C'est ce qui permet de répondre à la question difficile en montrant plutôt qu'en
+argumentant.
+
+**Il vit dans l'Atelier, sous « Le parcours »** — `services/le-parcours-de-la-demonstration.js`
+pour les règles, `-supabase.js` pour les sept comptes, `views/studio/dev/le-parcours.js`
+pour l'écran.
+
+#### Trois choses décidées en l'écrivant
+
+1. **Il lit l'état réel du chantier**, et n'invente aucune progression. Chaque
+   étape est `franchie`, `franchissable`, `hors d'atteinte` ou **`inconnue`** —
+   ce dernier état étant celui qu'on oublie : une base qui n'a pas répondu n'est
+   pas un chantier vide, et les confondre enverrait reverser des documents déjà
+   versés (règle 5). L'ignorance se propage d'ailleurs aux étapes suivantes,
+   parce qu'elle est réelle : on ne peut pas dire qu'une étape est hors
+   d'atteinte sans affirmer que la précédente n'a pas eu lieu.
+
+2. **Une étape ne devient franchissable que si la précédente est franchie**, et
+   il n'y en a jamais qu'une. C'est ce qui fait du parcours un chemin plutôt
+   qu'une liste de courses — et c'est la même règle que celle des crans : une
+   étape lue hors de son rang ne veut rien dire.
+
+   Le cas tordu est gardé tel quel : un chantier peut porter des affirmations en
+   mémoire sans qu'aucun document n'ait été lu — versées à la main, ou par un
+   autre chemin. L'étape 6 est alors franchie *et* l'étape 3 reste hors
+   d'atteinte. Le parcours ne lisse pas cette incohérence pour avoir l'air
+   cohérent : c'est la vérité du chantier.
+
+3. **Chaque étape porte ce qu'elle ne montre pas**, et le parcours entier porte
+   ce qu'il ne raconte pas. Sans cela, sept étapes vertes se lisent « tout est
+   vérifié », ce que ce plan a passé cinq tours à ne pas laisser croire
+   (règle 3 de ces écrans).
+
+#### Le septième point ne se compte pas, il se calcule
+
+Six faits sur sept sont des comptes. Le septième — « voir la prédiction qui en
+découle » — est le **cran 4** : une fonction qui emploie ce qu'une autre conclut.
+Il se calcule par `lesCheminsEntreBlocs`, la même fonction qui dessine les
+chemins sur l'écran de la proposition — de sorte que le parcours compte
+exactement les chemins que la Mémoire montre (règle 4).
+
+C'est aussi ce qui le rend honnête : une mémoire de quatre cents affirmations
+sans une seule règle laisse le septième point **non franchi**, et c'est juste.
+Une mémoire qui ne prédit rien est un classeur.
 
 ---
 
@@ -336,7 +377,7 @@ Tour 1  les crans nommés            ✔ livré  ← le vocabulaire de tous les 
 Tour 2  le Mdall devant le diff     ✔ livré  ← et groupé par cran partout d'un coup
 Tour 3  le Mdall à l'analyse        ✔ livré  ← le rapport BC, et le cadrage
 Tour 4  les preuves                 ✔ livré  ← celles de la lecture, et celles du code
-Tour 6  le parcours                          ← en dernier : il raconte ce qui existe
+Tour 6  le parcours                 ✔ livré  ← en dernier : il raconte ce qui existe
 ```
 
 **Les tours 1 et 2 sont allés ensemble, et le 2 est passé devant le 3.** Deux

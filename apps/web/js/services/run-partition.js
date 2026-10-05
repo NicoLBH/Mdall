@@ -374,6 +374,73 @@ export function quelqueChoseTourne(entries = []) {
     .some((une) => String(une?.status ?? "").trim() === "running");
 }
 
+/* ── Ce qu'une analyse de document déclare d'elle-même ─────────────────────── */
+
+/**
+ * Les statuts qu'`analysis_runs.status` peut porter.
+ *
+ * **La contrainte de la table est l'autorité**, et elle les énumère :
+ * `check (status in ('queued', 'running', 'succeeded', 'failed', 'canceled'))`
+ * (`202604030002_init_schema.sql`). Les recopier ici les met à portée du
+ * navigateur, qui ne lit pas le schéma ; les deux listes se confrontent dans
+ * l'épreuve des colonnes.
+ */
+export const LES_STATUTS_DUNE_ANALYSE = {
+  EN_FILE: "queued",
+  EN_COURS: "running",
+  REUSSIE: "succeeded",
+  ECHOUEE: "failed",
+  ANNULEE: "canceled"
+};
+
+/**
+ * Cette analyse est-elle encore vive ?
+ *
+ * ## Le défaut que cette fonction ferme
+ *
+ * Le journal rangeait `running` d'un côté et **tout le reste** de l'autre,
+ * `completed`. `queued` tombait donc avec les finies : une analyse qui attend
+ * s'affichait comme terminée, sans issue, et surtout `quelqueChoseTourne` n'y
+ * voyait aucun vivant — **le battement du journal ne partait jamais**, et
+ * l'écran restait figé jusqu'à ce qu'on recharge la page.
+ *
+ * « En file » veut dire qu'elle n'a pas eu lieu et que quelque chose va s'en
+ * occuper. C'est le contraire de finie (règle 5).
+ *
+ * ## Pourquoi un statut inconnu compte comme vif
+ *
+ * Une version plus récente de la base peut poser un statut que cet écran ne
+ * connaît pas. Le compter comme fini afficherait une issue qu'on n'a pas lue ;
+ * le compter comme vif fait battre le journal quelques fois de trop, puis la
+ * ligne finit par porter un statut connu. Des deux erreurs possibles, c'est la
+ * seule qui se corrige d'elle-même.
+ */
+export function uneAnalyseEstVive(statut = "") {
+  const dit = String(statut ?? "").trim().toLowerCase();
+  // Une ligne sans statut est traitée par la base comme `queued` : c'est son
+  // défaut de colonne, et donc une analyse qui attend.
+  if (!dit) return true;
+  return ![
+    LES_STATUTS_DUNE_ANALYSE.REUSSIE,
+    LES_STATUTS_DUNE_ANALYSE.ECHOUEE,
+    LES_STATUTS_DUNE_ANALYSE.ANNULEE
+  ].includes(dit);
+}
+
+/**
+ * Ce qu'une analyse finie a donné : `"success"`, `"error"`, ou `null`.
+ *
+ * `null` pour une analyse qui n'a pas fini — et non `"success"`. Une issue
+ * affichée sur un travail qui n'a pas eu lieu est la pire des deux (règle 5).
+ */
+export function lissueDUneAnalyse(statut = "") {
+  const dit = String(statut ?? "").trim().toLowerCase();
+  if (dit === LES_STATUTS_DUNE_ANALYSE.REUSSIE) return "success";
+  if (dit === LES_STATUTS_DUNE_ANALYSE.ECHOUEE) return "error";
+  if (dit === LES_STATUTS_DUNE_ANALYSE.ANNULEE) return "error";
+  return null;
+}
+
 export function executionsAGarder(vivantes = [], lues = []) {
   const enCours = (Array.isArray(vivantes) ? vivantes : [])
     .filter((entree) => String(entree?.status ?? "").trim() === "running");

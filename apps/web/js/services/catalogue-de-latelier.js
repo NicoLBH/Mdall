@@ -243,6 +243,29 @@ export const UTILITAIRES = [
     ajouteLe: "2025-12-19"
   },
   {
+    cible: "dev-le-parcours",
+    nom: "Le parcours",
+    rayon: RAYONS.MEMOIRE,
+    resume: "Comment un document devient une mémoire qui prédit — les sept étapes, "
+      + "dans l'ordre, sur les écrans de ce chantier.",
+    entrees: ["Ce que ce chantier a déjà fait"],
+    sorties: [
+      "Les sept étapes de la chaîne, et où en est celui-ci",
+      "Ce que chaque étape ne montre pas"
+    ],
+    version: "1.0",
+    /**
+     * **Il n'appelle aucun modèle, et c'est ce qui le rend montrable.** Il
+     * compte ce que la base porte et en déduit l'ordre ; le même chantier rend
+     * le même parcours deux fois de suite.
+     */
+    intelligence: false,
+    aussiALaMain: "Ouvrir les sept écrans un par un : Analyse de documents, "
+      + "Propositions, Mémoire, Indicateurs.",
+    mots: ["parcours", "démonstration", "chaîne", "crans", "comprendre", "visite"],
+    ajouteLe: "2026-10-05"
+  },
+  {
     cible: "dev-ct-continuity-lab",
     nom: "Suivi des avis BC",
     rayon: RAYONS.DEVELOPPEMENT,

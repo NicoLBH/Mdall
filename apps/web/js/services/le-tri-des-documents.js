@@ -46,6 +46,8 @@
  * compteur et à la liste de rester d'accord.
  */
 
+import { leJourDeLaSource } from "./la-chronologie-des-sources.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
@@ -160,13 +162,38 @@ export function leTriDit(tri) {
  * **jamais la date du jour**. Un document sans date remonterait sinon en tête
  * comme s'il venait d'arriver, et c'est le défaut que `tri-des-sujets.js` a
  * déjà payé une fois.
+ *
+ * ## Deux écritures arrivent dans la même colonne, et `Date.parse` n'en lit qu'une
+ *
+ * `quand` porte la date **du document**, dans les mots du document : un compte
+ * rendu rend `2024-12-03`, un rapport de bureau de contrôle rend `28/03/2025`.
+ * `Date.parse` ne lit que la première, et sur la seconde il se trompe de deux
+ * façons :
+ *
+ *  - `Date.parse("28/03/2025")` rend `NaN` : le rapport comptait comme **sans
+ *    date** et tombait en queue de liste, alors que l'écran affiche sa date ;
+ *  - `Date.parse("03/12/2024")` rend **le 12 mars 2024**, parce qu'il lit
+ *    mois/jour. Un rapport du 3 décembre se rangeait en mars, sans que rien ne
+ *    le dise.
+ *
+ * Le second est le pire des deux : une date qui ne se lit pas se compte et
+ * s'annonce, une date qui se lit mal ne s'annonce jamais (règle 5). Les deux
+ * écritures se lisent donc par `leJourDeLaSource`, qui reconnaît l'ISO d'abord
+ * — à son ancrage — puis le français, et qui est le seul endroit où cette
+ * distinction vit (règle 10).
  */
 export function linstantDuDocument(document, tri) {
   const champ = leTriDit(tri).champ;
   const dit = texte(document?.[champ]);
   if (!dit) return null;
 
-  const lu = Date.parse(dit);
+  // `leJourDeLaSource` rend un jour ISO, ou `""` quand il ne sait pas lire. On
+  // ne retombe **pas** sur `Date.parse` dans ce cas : ce serait exactement
+  // rouvrir la porte au 3 décembre lu en mars.
+  const jour = leJourDeLaSource(dit);
+  if (!jour) return null;
+
+  const lu = Date.parse(`${jour}T00:00:00Z`);
   return Number.isFinite(lu) ? lu : null;
 }
 

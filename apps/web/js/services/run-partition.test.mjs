@@ -5,8 +5,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  ORIGINE, ONGLETS, TOUTES, decrireVisibilite, longletDit, lorigineDunGeste,
-  ongletValide, partitionnerActions
+  LES_STATUTS_DUNE_ANALYSE, ORIGINE, ONGLETS, TOUTES, decrireVisibilite, lissueDUneAnalyse,
+  longletDit, lorigineDunGeste, ongletValide, partitionnerActions, quelqueChoseTourne,
+  uneAnalyseEstVive
 } from "./run-partition.js";
 
 const PROJET = { id: "a", origine: "projet", privee: false };
@@ -419,4 +420,71 @@ test("la vue entière se retrouve par sa clé, et une clé inconnue ouvre la pre
   // La première de la liste **est** la vue sans filtre : si quelqu'un réordonne
   // les onglets, c'est ici que l'arrivée change, et l'épreuve le dira.
   assert.equal(longletDit("inconnue").libelle, "Toutes les actions");
+});
+
+/* ── Ce qu'une analyse de document déclare d'elle-même ─────────────────────── */
+
+test("une analyse en file d'attente est vive, et non terminée", () => {
+  /**
+   * **Le défaut tel qu'il se montrait.** « En file » tombait du côté des
+   * finies : la ligne s'affichait terminée sans issue, et comme rien n'était
+   * reconnu vif, le battement du journal ne partait jamais. Il fallait
+   * recharger la page pour voir avancer un travail qu'on venait de lancer.
+   */
+  assert.equal(uneAnalyseEstVive(LES_STATUTS_DUNE_ANALYSE.EN_FILE), true);
+  assert.equal(uneAnalyseEstVive(LES_STATUTS_DUNE_ANALYSE.EN_COURS), true);
+
+  assert.equal(uneAnalyseEstVive(LES_STATUTS_DUNE_ANALYSE.REUSSIE), false);
+  assert.equal(uneAnalyseEstVive(LES_STATUTS_DUNE_ANALYSE.ECHOUEE), false);
+  assert.equal(uneAnalyseEstVive(LES_STATUTS_DUNE_ANALYSE.ANNULEE), false);
+});
+
+test("une analyse en file fait battre le journal", () => {
+  // La conséquence, et non seulement la cause : c'est par `quelqueChoseTourne`
+  // que le battement se décide, et c'est donc là qu'il faut voir l'effet.
+  const enFile = { id: "a", status: uneAnalyseEstVive("queued") ? "running" : "completed" };
+  assert.equal(quelqueChoseTourne([enFile]), true);
+});
+
+test("une ligne sans statut attend, et un statut inconnu aussi", () => {
+  // La base pose `queued` par défaut : une ligne muette est une ligne qui
+  // attend. Et un statut qu'une version plus récente aurait posé fait battre le
+  // journal quelques fois de trop — la seule des deux erreurs qui se corrige
+  // d'elle-même.
+  assert.equal(uneAnalyseEstVive(""), true);
+  assert.equal(uneAnalyseEstVive(null), true);
+  assert.equal(uneAnalyseEstVive("reprise_en_attente"), true);
+});
+
+test("une analyse qui n'a pas fini n'a pas d'issue", () => {
+  // Et non « réussie » : une issue affichée sur un travail qui n'a pas eu lieu
+  // est la pire des deux (règle 5).
+  assert.equal(lissueDUneAnalyse(LES_STATUTS_DUNE_ANALYSE.EN_FILE), null);
+  assert.equal(lissueDUneAnalyse(LES_STATUTS_DUNE_ANALYSE.EN_COURS), null);
+  assert.equal(lissueDUneAnalyse(LES_STATUTS_DUNE_ANALYSE.REUSSIE), "success");
+  assert.equal(lissueDUneAnalyse(LES_STATUTS_DUNE_ANALYSE.ECHOUEE), "error");
+  assert.equal(lissueDUneAnalyse(LES_STATUTS_DUNE_ANALYSE.ANNULEE), "error");
+});
+
+test("les statuts déclarés sont ceux que la table accepte", () => {
+  /**
+   * **Les deux listes se confrontent**, parce que le navigateur ne lit pas le
+   * schéma. Un statut ajouté à la contrainte et oublié ici tomberait dans
+   * « inconnu » — ce qui est rattrapable — mais un statut **retiré** de la
+   * contrainte et gardé ici serait un mot mort qu'on croit vivant (règle 1).
+   *
+   * On lit la contrainte, et non un commentaire qui la décrit : un commentaire
+   * dit ce qu'on a voulu, la contrainte ce que la base fait.
+   */
+  const schema = readFileSync(
+    join(RACINE, "supabase", "migrations", "202604030002_init_schema.sql"), "utf8"
+  );
+
+  const contrainte = schema.match(
+    /constraint analysis_runs_status_check\s*\n?\s*check \(status in \(([^)]*)\)\)/
+  );
+  assert.ok(contrainte, "la contrainte des statuts n'a pas été retrouvée dans le schéma");
+
+  const acceptes = [...contrainte[1].matchAll(/'([^']+)'/g)].map((un) => un[1]).sort();
+  assert.deepEqual(Object.values(LES_STATUTS_DUNE_ANALYSE).sort(), acceptes);
 });

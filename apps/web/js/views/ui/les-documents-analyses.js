@@ -39,6 +39,9 @@ import {
   LES_TRIS_DES_DOCUMENTS, SENS, ceQueLeTriDit, leTriDesDocumentsValide, leTriDit,
   trierLesDocuments
 } from "../../services/le-tri-des-documents.js";
+import {
+  ceQuUneSeulePropositionPorterait, ceQueLeBoutonDuLotDit, lesFamillesDuLot
+} from "../../services/ce-qui-attend-une-proposition.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -176,6 +179,18 @@ export function renderLeTableauDesDocuments({
   const ici = trierLesDocuments(parEtat(deLaFamille, filtre), ordre);
   const ceQueLeTri = ceQueLeTriDit(ici, ordre);
 
+  /**
+   * **Ce qui attend une proposition se compte sur la famille ouverte**, comme
+   * les pastilles, et non sur le chantier entier : un bouton qui annoncerait
+   * dix-huit documents sous l'onglet Mails en emporterait six.
+   *
+   * Il se compte sur `deLaFamille` et non sur `ici` : le filtre d'état et le tri
+   * changent ce qu'on **regarde**, pas ce qui attend. Un filtre « En échec »
+   * ferait sinon dire qu'aucun document n'attend, alors que douze attendent sous
+   * le filtre voisin.
+   */
+  const porterait = ceQuUneSeulePropositionPorterait(deLaFamille, famille);
+
   return `
     <section class="documents-analyses">
       ${/*
@@ -248,9 +263,74 @@ export function renderLeTableauDesDocuments({
       ${ceQueLeTri
         ? `<p class="documents-analyses__mot mono-small">${escapeHtml(ceQueLeTri)}</p>`
         : ""}
+      ${renderCeQuiAttendUneProposition(porterait)}
     </section>
   `;
 }
+
+/**
+ * Ce qui attend une proposition, sous le tableau.
+ *
+ * ## Pourquoi en bas, et non dans l'en-tête
+ *
+ * L'en-tête répond à « où en sont mes documents ? » — combien, dans quel état,
+ * dans quel ordre. Celui-ci répond à « et maintenant ? », qui est la question
+ * d'après. La mettre dans l'en-tête l'aurait posée avant qu'on ait regardé ce
+ * qu'il y avait à regarder, et aurait repoussé le tri sur une seconde ligne.
+ *
+ * ## Le bouton n'est pas branché, et le dit
+ *
+ * Composer une proposition sur douze documents demande de rassembler douze
+ * matières et de les écrire en lignes : c'est le tour suivant. Ce qui est
+ * livré ici est **le lot** — ce qui partirait, dans quel ordre, et ce qui en
+ * est exclu —, parce que c'est lui qui décidait de tout le reste et qu'on ne
+ * pouvait pas l'écrire sans le voir.
+ *
+ * Un bouton qui aurait l'air de marcher serait une intention présentée comme
+ * une chose qui marche (règle 12). Il porte donc ce qu'il fera, et la phrase
+ * dit qu'il ne le fait pas encore.
+ */
+function renderCeQuiAttendUneProposition(porterait) {
+  const bouton = ceQueLeBoutonDuLotDit(porterait);
+  const familles = lesFamillesDuLot(porterait);
+
+  return `
+    <div class="documents-attente">
+      <div class="documents-attente__dit">
+        <p class="documents-attente__phrase">${escapeHtml(porterait.dit)}</p>
+        ${familles.length > 1
+          ? `<p class="documents-attente__familles mono-small">${escapeHtml(
+              familles.map((une) => `${une.combien} ${une.nom}`).join(" · "))}</p>`
+          : ""}
+        ${porterait.sansDate
+          ? `<p class="documents-attente__familles mono-small">${escapeHtml(
+              `${porterait.sansDate} ${porterait.sansDate > 1
+                ? "n'ont pas de date de document : la période ne les couvre pas"
+                : "n'a pas de date de document : la période ne le couvre pas"}`)}</p>`
+          : ""}
+      </div>
+      <button type="button" class="gh-btn gh-btn--sm" disabled
+        title="${escapeHtml([bouton.titre, PAS_ENCORE_BRANCHE].filter(Boolean).join(" "))}">
+        ${svgIcon("git-pull-request", { className: "octicon" })} ${escapeHtml(bouton.libelle)}
+      </button>
+      ${bouton.ouvert
+        ? `<p class="documents-attente__pas-branche mono-small">${
+            escapeHtml(PAS_ENCORE_BRANCHE)}</p>`
+        : ""}
+    </div>
+  `;
+}
+
+/**
+ * Ce que l'écran dit du geste qui n'existe pas encore.
+ *
+ * **Écrit une fois**, parce qu'il est dit deux fois — dans l'infobulle et sous
+ * le bouton — et que deux phrases auraient fini par ne plus promettre la même
+ * chose (règle 10).
+ */
+export const PAS_ENCORE_BRANCHE = "Ce geste n'est pas encore branché : le lot est "
+  + "constitué, la proposition qui le portera reste à écrire. En attendant, une "
+  + "proposition se fait depuis un document ouvert.";
 
 /**
  * Le menu de tri, dans l'en-tête du tableau.

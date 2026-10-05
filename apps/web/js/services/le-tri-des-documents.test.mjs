@@ -219,3 +219,92 @@ test("un document en attente d'analyse se dit autrement", () => {
   const deux = ceQueLeTriDit([un("a"), un("b")], PAR_ANALYSE);
   assert.match(deux, /2 documents n'ont pas encore été analysés :/);
 });
+
+/* ── Les deux écritures de la date du document ──────────────────────────────── */
+
+test("un rapport daté à la française se range, et ne tombe pas en queue", () => {
+  /**
+   * **`quand` porte les mots du document**, et ils ne sont pas les mêmes d'une
+   * famille à l'autre : un compte rendu rend `2024-12-03`, un rapport de bureau
+   * de contrôle rend `28/03/2025`. `Date.parse` ne lisait que la première, et
+   * tous les rapports comptaient donc comme « sans date de document » —
+   * relégués en queue de liste alors que l'écran affiche leur date.
+   */
+  assert.notEqual(linstantDuDocument(un("x", { quand: "28/03/2025" }), PAR_DOCUMENT), null);
+
+  const ranges = trierLesDocuments([
+    un("cr-de-decembre", { quand: "2024-12-03" }),
+    un("rapport-de-mars", { quand: "28/03/2025" })
+  ], PAR_DOCUMENT);
+
+  assert.deepEqual(ranges.map((document) => document.id), ["rapport-de-mars", "cr-de-decembre"]);
+});
+
+test("le 3 décembre ne se range pas en mars", () => {
+  /**
+   * **Le pire des deux cas, et le seul qui ne s'annonce pas.**
+   *
+   * `Date.parse("03/12/2024")` rend le **12 mars 2024** : il lit mois/jour. Une
+   * date qui ne se lit pas se compte et se dit ; une date qui se lit mal ne dit
+   * rien du tout, et le document se range neuf mois trop tôt (règle 5).
+   */
+  const troisDecembre = linstantDuDocument(un("x", { quand: "03/12/2024" }), PAR_DOCUMENT);
+  assert.equal(new Date(troisDecembre).toISOString().slice(0, 10), "2024-12-03");
+
+  const ranges = trierLesDocuments([
+    un("trois-decembre", { quand: "03/12/2024" }),
+    un("premier-juillet", { quand: "01/07/2024" })
+  ], PAR_DOCUMENT);
+
+  assert.deepEqual(ranges.map((document) => document.id), ["trois-decembre", "premier-juillet"]);
+});
+
+test("l'écran ne compte plus les rapports datés parmi les sans-date", () => {
+  // Le compteur disait « 6 ne portent pas de date de document » sur six rapports
+  // qui affichaient tous la leur : la phrase accusait le document d'un défaut
+  // qui était le nôtre.
+  const documents = [
+    un("a", { quand: "28/03/2025" }),
+    un("b", { quand: "16/04/2025" }),
+    un("c", { quand: "" })
+  ];
+  assert.equal(combienSansLaDate(documents, PAR_DOCUMENT), 1);
+});
+
+test("l'ordre à l'envers vaut aussi pour les dates à la française", () => {
+  const ranges = trierLesDocuments([
+    un("mars", { quand: "28/03/2025" }),
+    un("avril", { quand: "16/04/2025" }),
+    un("novembre", { quand: "25/11/2024" })
+  ], PAR_DOCUMENT_A_LENVERS);
+
+  assert.deepEqual(ranges.map((document) => document.id), ["novembre", "mars", "avril"]);
+});
+
+test("une date que seul Date.parse sait lire reste une date qu'on ne sait pas lire", () => {
+  /**
+   * **Et surtout : on ne retombe pas sur `Date.parse`.**
+   *
+   * `Date.parse("December 3, 2024")` réussit là où nos deux lectures — l'ISO et
+   * le français — échouent. On pourrait croire qu'un repli sur lui serait du
+   * bonus : il lirait quelques dates de plus, et rendrait `null` pour le reste.
+   *
+   * C'est faux, et c'est tout le défaut de ce tour. `Date.parse` ne refuse pas
+   * ce qu'il ne comprend pas : il **devine**, et sur `03/12/2024` il rend le 12
+   * mars. Le repli rouvrirait donc exactement la porte qu'on vient de fermer —
+   * pour trois formats anglais que `etabli_le` ne porte jamais.
+   *
+   * Une date écrite d'une façon qu'on ne sait pas lire se compte et s'annonce.
+   * C'est moins que ce que `Date.parse` lirait, et c'est plus sûr.
+   */
+  for (const anglaise of ["December 3, 2024", "Dec 3 2024"]) {
+    assert.notEqual(Date.parse(anglaise), NaN, "Date.parse sait la lire");
+    assert.equal(
+      linstantDuDocument(un("x", { quand: anglaise }), PAR_DOCUMENT), null,
+      `« ${anglaise} » ne doit pas se ranger`
+    );
+  }
+
+  // Et l'écran le dit, plutôt que de le taire.
+  assert.equal(combienSansLaDate([un("x", { quand: "Dec 3 2024" })], PAR_DOCUMENT), 1);
+});

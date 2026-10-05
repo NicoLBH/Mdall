@@ -38,6 +38,7 @@ import {
   CE_QUE_LE_RAPPORT_APPORTE, LA_VIE_DUN_AVIS, phraseDeLaSuite
 } from "../../services/le-devenir-dun-avis.js";
 import { renderLidentiteDunDocument } from "./lidentite-dun-document.js";
+import { renderUnTon } from "./un-ton.js";
 import { avisDuRapport } from "../../services/avis-versement.js";
 import { blocsAProposer } from "./mdall-de-la-proposition.js";
 import { SOUS_LE_TITRE, renderMdallAProposer } from "./mdall-a-proposer.js";
@@ -730,9 +731,10 @@ function renderLaFriseDunAvis(avis) {
           return `
             <li class="suite-avis__etape suite-avis__etape--${dit.ton}">
               <span class="suite-avis__quoi">${escapeHtml(dit.mot)}</span>
-              <span class="suite-avis__appreciation suite-avis__appreciation--${
-                escapeHtml(etape.vaut)}">${escapeHtml(
-                  etape.sens || etape.marque || "le rapport ne tranche pas")}</span>
+              ${renderUnTon({
+                mot: etape.sens || etape.marque || "le rapport ne tranche pas",
+                vaut: etape.vaut
+              })}
               <span class="suite-avis__ou mono-small">${escapeHtml([
                 leRapportDeLetape(etape), texte(etape.ou)
               ].filter(Boolean).join(" · "))}</span>
