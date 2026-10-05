@@ -23,6 +23,7 @@
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
+import { renderAttenteSpinner } from "./spinner.js";
 import { renderNavList, renderNavListGroup, renderNavListItem } from "./nav-list.js";
 import { renderProjectRail } from "./project-rail.js";
 import {
@@ -42,6 +43,7 @@ import {
 import {
   ceQuUneSeulePropositionPorterait, ceQueLeBoutonDuLotDit, lesFamillesDuLot
 } from "../../services/ce-qui-attend-une-proposition.js";
+import { lesFamillesSansTranscription } from "../../services/la-propo-dun-lot.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -136,7 +138,14 @@ export function renderLeRailDesFamilles({
  */
 export function renderLeTableauDesDocuments({
   documents = null, famille = TOUTES, enCours = false, rate = false, ouverte = "",
-  filtre = "", tri = ""
+  filtre = "", tri = "",
+  /**
+   * Où en est le portage du lot — `null` au repos.
+   *
+   * `{enCours, etape, bilan, proposition, raison}`. Il vient de l'écran, qui
+   * tient le geste : ce rendu ne porte aucun état.
+   */
+  portage = null
 } = {}) {
   const ce = ceQueDitLaFamille(famille) ?? ceQueDitLaFamille(TOUTES);
 
@@ -263,10 +272,28 @@ export function renderLeTableauDesDocuments({
       ${ceQueLeTri
         ? `<p class="documents-analyses__mot mono-small">${escapeHtml(ceQueLeTri)}</p>`
         : ""}
-      ${renderCeQuiAttendUneProposition(porterait)}
+      ${renderCeQuiAttendUneProposition(porterait, portage, deLaFamille)}
     </section>
   `;
 }
+
+/**
+ * Le geste qui porte le lot. L'écran l'écoute.
+ *
+ * Un nom, pas une chaîne recopiée : le bouton l'écrit et le gestionnaire le lit
+ * (règle 10).
+ */
+export const PORTER_LE_LOT = "porterLeLot";
+
+/**
+ * Aller relire la proposition que le lot vient d'ouvrir.
+ *
+ * **Un geste de l'écran, et non un lien.** Le départ passe par
+ * `store.pendingPropositionId`, qui dit à l'onglet Propositions laquelle
+ * ouvrir — c'est ainsi que l'écran d'un document y va déjà, et deux chemins
+ * vers la même proposition auraient fini par ne plus l'ouvrir pareil (règle 10).
+ */
+export const RELIRE_LA_PROPOSITION = "relireLaProposition";
 
 /**
  * Ce qui attend une proposition, sous le tableau.
@@ -278,19 +305,21 @@ export function renderLeTableauDesDocuments({
  * d'après. La mettre dans l'en-tête l'aurait posée avant qu'on ait regardé ce
  * qu'il y avait à regarder, et aurait repoussé le tri sur une seconde ligne.
  *
- * ## Le bouton n'est pas branché, et le dit
+ * ## Quatre états, et un seul à la fois
  *
- * Composer une proposition sur douze documents demande de rassembler douze
- * matières et de les écrire en lignes : c'est le tour suivant. Ce qui est
- * livré ici est **le lot** — ce qui partirait, dans quel ordre, et ce qui en
- * est exclu —, parce que c'est lui qui décidait de tout le reste et qu'on ne
- * pouvait pas l'écrire sans le voir.
+ * Au repos — le lot, ce qu'il porterait, et le bouton. Pendant — l'étape en
+ * cours, « 3 sur 12 », et le bouton éteint : un lot de douze documents prend une
+ * minute, et un écran qui ne dirait rien passerait pour bloqué. Après — le
+ * bilan et le lien vers la proposition. Et le refus, quand rien n'a pu être
+ * ouvert.
  *
- * Un bouton qui aurait l'air de marcher serait une intention présentée comme
- * une chose qui marche (règle 12). Il porte donc ce qu'il fera, et la phrase
- * dit qu'il ne le fait pas encore.
+ * **Jamais deux ensemble.** Le bilan du lot précédent affiché à côté du lot
+ * suivant ferait lire les chiffres de l'un sur l'autre.
  */
-function renderCeQuiAttendUneProposition(porterait) {
+function renderCeQuiAttendUneProposition(porterait, portage, deLaFamille) {
+  if (portage?.enCours) return renderLePortageEnCours(portage);
+  if (portage?.bilan) return renderLeLotPorte(portage);
+
   const bouton = ceQueLeBoutonDuLotDit(porterait);
   const familles = lesFamillesDuLot(porterait);
 
@@ -308,29 +337,94 @@ function renderCeQuiAttendUneProposition(porterait) {
                 ? "n'ont pas de date de document : la période ne les couvre pas"
                 : "n'a pas de date de document : la période ne le couvre pas"}`)}</p>`
           : ""}
+        ${/*
+          **Ce que le lot ne sait pas emporter, et pourquoi.** Trois fils lus et
+          laissés dehors en silence feraient croire que le lot a tout pris
+          (règle 5).
+        */""}
+        ${lesFamillesSansTranscription(deLaFamille)
+          .map((une) => `<p class="documents-attente__familles mono-small">${escapeHtml(
+            `${une.combien} ${une.nom} : ${une.pourquoiPas}`)}</p>`).join("")}
       </div>
-      <button type="button" class="gh-btn gh-btn--sm" disabled
-        title="${escapeHtml([bouton.titre, PAS_ENCORE_BRANCHE].filter(Boolean).join(" "))}">
+      <button type="button" class="gh-btn gh-btn--sm${bouton.ouvert ? " gh-btn--validate" : ""}"
+        ${bouton.ouvert ? `data-attente-action="${PORTER_LE_LOT}"` : "disabled"}
+        title="${escapeHtml(bouton.titre)}">
         ${svgIcon("git-pull-request", { className: "octicon" })} ${escapeHtml(bouton.libelle)}
       </button>
-      ${bouton.ouvert
-        ? `<p class="documents-attente__pas-branche mono-small">${
-            escapeHtml(PAS_ENCORE_BRANCHE)}</p>`
-        : ""}
     </div>
   `;
 }
 
 /**
- * Ce que l'écran dit du geste qui n'existe pas encore.
+ * Le lot en cours de portage.
  *
- * **Écrit une fois**, parce qu'il est dit deux fois — dans l'infobulle et sous
- * le bouton — et que deux phrases auraient fini par ne plus promettre la même
- * chose (règle 10).
+ * **L'étape nommée, et non une barre qui tourne.** « 3 sur 12 · CR du 12
+ * novembre » dit où l'on en est et combien il reste ; un disque qui tourne dit
+ * seulement que quelque chose se passe, et c'est au bout de quarante secondes
+ * qu'on voudrait savoir laquelle.
  */
-export const PAS_ENCORE_BRANCHE = "Ce geste n'est pas encore branché : le lot est "
-  + "constitué, la proposition qui le portera reste à écrire. En attendant, une "
-  + "proposition se fait depuis un document ouvert.";
+function renderLePortageEnCours(portage) {
+  const etape = portage?.etape ?? null;
+
+  return `
+    <div class="documents-attente">
+      <div class="documents-attente__dit">
+        <p class="documents-attente__phrase">${escapeHtml(
+          etape?.dit || "Composition de la proposition…")}</p>
+        <p class="documents-attente__familles mono-small">${escapeHtml(
+          "Rien n'est écrit : la proposition restera ouverte, et c'est en la "
+          + "signant que la mémoire recevra quelque chose.")}</p>
+      </div>
+      <button type="button" class="gh-btn gh-btn--sm" disabled>
+        ${renderAttenteSpinner()} En cours
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * Ce que le lot a donné, une fois porté.
+ *
+ * **Le bilan en entier, et le lien vers la proposition.** Sans le lien, il
+ * faudrait aller la chercher dans une liste où elle vient d'arriver ; sans le
+ * bilan, on ne saurait pas que trois des douze n'ont rien donné.
+ */
+function renderLeLotPorte(portage) {
+  const { bilan, proposition, raison } = portage;
+  const numero = proposition?.number ?? proposition?.numero ?? null;
+
+  return `
+    <div class="documents-attente documents-attente--porte">
+      <div class="documents-attente__dit">
+        <p class="documents-attente__phrase">${escapeHtml(bilan.dit)}</p>
+        ${bilan.ecartees
+          ? `<p class="documents-attente__familles mono-small">${escapeHtml(
+              `${bilan.ecartees} ligne${bilan.ecartees > 1 ? "s" : ""} déjà portée${
+                bilan.ecartees > 1 ? "s" : ""} par cette proposition ${
+                bilan.ecartees > 1 ? "ont" : "a"} été écartée${
+                bilan.ecartees > 1 ? "s" : ""} : deux documents disent souvent la `
+              + "même chose du même point.")}</p>`
+          : ""}
+        ${bilan.motifs.map((un) => `<p class="documents-attente__refus forme-manques">${
+          escapeHtml(`${un.titre} : ${un.motif}`)}</p>`).join("")}
+        ${raison
+          ? `<p class="documents-attente__refus forme-manques">${escapeHtml(raison)}</p>`
+          : ""}
+        <p class="documents-attente__familles mono-small">${escapeHtml(
+          "Elle est ouverte, et rien n'est entré dans la mémoire : c'est la "
+          + "signature qui écrit.")}</p>
+      </div>
+      ${proposition?.id
+        ? `<button type="button" class="gh-btn gh-btn--sm gh-btn--validate"
+             data-attente-action="${RELIRE_LA_PROPOSITION}"
+             data-attente-proposition="${escapeHtml(String(proposition.id))}">
+             ${svgIcon("git-pull-request", { className: "octicon" })}
+             Relire la proposition${numero ? ` n° ${escapeHtml(String(numero))}` : ""}
+           </button>`
+        : ""}
+    </div>
+  `;
+}
 
 /**
  * Le menu de tri, dans l'en-tête du tableau.

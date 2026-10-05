@@ -29505,6 +29505,14 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
 .documents-attente__dit{flex:1 1 320px;min-width:0;}
 .documents-attente__phrase{margin:0;font-weight:600;}
 .documents-attente__familles{margin:2px 0 0;color:var(--muted);}
-/* La phrase qui dit que le geste n'est pas branché passe sous le bouton, sur
-   toute la largeur : à côté, elle se serait lue comme son sous-titre. */
-.documents-attente__pas-branche{flex:1 1 100%;margin:0;color:var(--muted);}
+/* Ce qui a échoué, ou ce que le refus dit : la même couleur que les manques
+   d'une lecture, et sur toute la largeur — à côté du bouton, un motif se lirait
+   comme son sous-titre. */
+.documents-attente__refus{flex:1 1 100%;margin:4px 0 0;}
+
+/* Le lot porté : la bordure passe au vert, parce que c'est le seul état de ce
+   bloc où quelque chose a abouti. Rien n'est entré dans la mémoire pour autant,
+   et la phrase le dit — la couleur ne doit pas tenir ce discours à sa place. */
+.documents-attente--porte{
+  border-top-color:var(--fgColor-success, #3fb950);
+}

@@ -17,7 +17,7 @@ import test from "node:test";
 import {
   CE_QUE_LE_REFUS_DIT, POURQUOI_PAS_DE_LOT, attendUneProposition,
   ceQuUneSeulePropositionPorterait, ceQueLeBoutonDuLotDit, leLotQuiAttend, leTitreDuLot,
-  lesFamillesDuLot, lesLecturesSansDocument, phraseDuLot
+  lesFamillesDuLot, lesLecturesSansDocument, lesLecturesSansTranscription, phraseDuLot
 } from "./ce-qui-attend-une-proposition.js";
 import { FAMILLE, TOUTES } from "./les-familles-de-document.js";
 import { OU_EN_EST } from "./les-documents-analyses.js";
@@ -270,4 +270,65 @@ test("un bouton sans rien ne prétend pas pouvoir", () => {
   for (const rien of [null, undefined, {}]) {
     assert.equal(ceQueLeBoutonDuLotDit(rien).ouvert, false);
   }
+});
+
+/* ── Ce que le lot ne sait pas emporter ────────────────────────────────────── */
+
+test("un fil de messagerie n'entre pas dans un lot, et se compte", () => {
+  /**
+   * **Le défaut qu'on ferme ici est le plus silencieux de tous.** Un fil entré
+   * dans le lot n'y donnerait rien — rien ne transcrit encore une prise de
+   * position en affirmation — et repartirait **marqué comme porté** : disparu du
+   * compteur sans être passé nulle part, et introuvable ensuite (règle 5).
+   *
+   * Il se compte donc à part, comme une lecture sans document : abouties toutes
+   * les deux, bloquées toutes les deux, pour deux raisons différentes.
+   */
+  const fil = un("f", { famille: FAMILLE.MAIL });
+  assert.equal(attendUneProposition(fil), false);
+
+  assert.deepEqual(lesLecturesSansTranscription([un("cr"), fil]).map((une) => une.id), ["f"]);
+  assert.deepEqual(leLotQuiAttend([un("cr"), fil]).map((une) => une.id), ["cr"]);
+});
+
+test("un chantier qui n'a lu que des fils ne dit pas que tout est versé", () => {
+  // « Tout est déjà parti dans une proposition » enverrait chercher une
+  // proposition qui n'existe pas.
+  const porterait = ceQuUneSeulePropositionPorterait([
+    un("f1", { famille: FAMILLE.MAIL }), un("f2", { famille: FAMILLE.MAIL })
+  ]);
+
+  assert.equal(porterait.peut, false);
+  assert.equal(porterait.pourquoiPas, POURQUOI_PAS_DE_LOT.SANS_TRANSCRIPTION);
+  assert.equal(porterait.sansTranscription, 2);
+  assert.match(CE_QUE_LE_REFUS_DIT[porterait.pourquoiPas], /ont bien été lus/);
+});
+
+test("un fil déjà porté ne se compte plus dehors", () => {
+  // Il est passé par une proposition — par un autre chemin, ou par la main.
+  // Le recompter ferait grossir le nombre de ce qui reste à faire.
+  const porterait = ceQuUneSeulePropositionPorterait([
+    un("f", { famille: FAMILLE.MAIL, propositionId: "prop-3" })
+  ]);
+  assert.equal(porterait.sansTranscription, 0);
+  assert.equal(porterait.pourquoiPas, POURQUOI_PAS_DE_LOT.DEJA_TOUT_VERSE);
+});
+
+test("un fil n'est pas compté parmi les lectures sans document", () => {
+  // Les deux comptes doivent rester disjoints : un fil sans document de
+  // Fichiers tomberait sinon dans les deux, et la phrase l'annoncerait deux fois.
+  const fil = un("f", { famille: FAMILLE.MAIL, documentId: "" });
+  assert.deepEqual(lesLecturesSansDocument([fil]), []);
+  assert.deepEqual(lesLecturesSansTranscription([fil]).map((une) => une.id), ["f"]);
+});
+
+test("le lot mêle les deux familles qui se transcrivent", () => {
+  // Une proposition pour douze documents n'a pas de raison de séparer les
+  // comptes rendus des rapports : c'est le même chantier, et la même signature.
+  const lot = leLotQuiAttend([
+    un("cr", { famille: FAMILLE.CR, quand: "2024-11-12" }),
+    un("bc", { famille: FAMILLE.CONTROLE, quand: "28/03/2025" }),
+    un("fil", { famille: FAMILLE.MAIL })
+  ]);
+  assert.deepEqual(lot.map((une) => une.id), ["cr", "bc"]);
 });
