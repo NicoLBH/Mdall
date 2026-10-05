@@ -8,8 +8,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, OUVRIR_UN_DOCUMENT, laFamilleDesignee,
-  leDocumentDesigne, renderLeRailDesFamilles, renderLeTableauDesDocuments
+  CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, OUVRIR_UN_DOCUMENT, PORTER_LE_LOT, laFamilleDesignee,
+  leDocumentDesigne, renderLeGesteDuLotEnEntete, renderLeRailDesFamilles,
+  renderLeTableauDesDocuments
 } from "./les-documents-analyses.js";
 import { COLONNE_DU_COMPTE, POUSSE_A_DROITE } from "./data-table-shell.js";
 import { NOM_COUPABLE } from "./un-nom-coupable.js";
@@ -21,6 +22,10 @@ import {
   LES_TRIS_DES_DOCUMENTS, SENS, TRI_DES_DOCUMENTS, laCleDuTri
 } from "../../services/le-tri-des-documents.js";
 import { escapeHtml } from "../../utils/escape-html.js";
+import { LE_MOT_DU_GESTE } from "./transformer.js";
+import {
+  CE_QUE_LE_REFUS_DIT, POURQUOI_PAS_DE_LOT, ceQuUneSeulePropositionPorterait
+} from "../../services/ce-qui-attend-une-proposition.js";
 
 /** Les clés composées comme l'écran les compose, et non recopiées à la main. */
 const PAR_DOCUMENT = laCleDuTri(TRI_DES_DOCUMENTS.DOCUMENT, SENS.RECENT);
@@ -579,4 +584,120 @@ test("rien à expliquer sur l'ordre ne s'explique pas", () => {
   // Une phrase qui s'affiche toujours ne se lit jamais.
   const html = renderLeTableauDesDocuments({ documents: TOUS });
   assert.doesNotMatch(html, /reste à la fin/);
+});
+
+/* ── Le geste du lot : en haut, et en bas ────────────────────────────────── */
+
+/**
+ * Trois lectures qui attendent vraiment une proposition.
+ *
+ * `document_id` et `proposition_id` sont là **parce que le lot les exige** :
+ * sans rattachement à Fichiers, une ligne de proposition ne se vérifie pas. Une
+ * fixture qui les oublierait rendrait un bouton éteint, et les épreuves
+ * ci-dessous passeraient toutes pour la mauvaise raison.
+ */
+const QUI_ATTENDENT = lesDocumentsDuTableau({
+  analyses: lesDocumentsAnalyses({
+    controles: [{
+      id: "r-7", document: "RICT-07.pdf", document_id: "d-7", proposition_id: null,
+      numero_de_rapport: "RICT-07", etabli_le: "2026-04-18",
+      created_at: "2026-09-28T10:00:00Z", mesures: { avis: 12, marques: 4 }
+    }],
+    crs: [{
+      id: "c-7", document: "CR_17.pdf", document_id: "d-17", proposition_id: null,
+      numero_de_reunion: "17", tenue_le: "2026-04-23",
+      created_at: "2026-09-30T10:00:00Z", mesures: { points: 11 }
+    }]
+  })
+});
+
+/** Ce que le HTML émet au clic, partout où il l'émet. */
+function lesGestesEmis(html) {
+  return [...html.matchAll(/data-attente-action="([^"]*)"/g)].map((un) => un[1]);
+}
+
+test("l'en-tête et le bas du tableau portent le même geste", () => {
+  /**
+   * **Le défaut livré** : l'en-tête portait le « Transformer » d'un document
+   * ouvert, éteint à l'accueil et muet. On cliquait, il ne se passait rien.
+   * Les deux boutons doivent donc émettre la même chose — un geste qui
+   * n'existerait qu'en bas se chercherait en haut.
+   */
+  const porterait = ceQuUneSeulePropositionPorterait(QUI_ATTENDENT, TOUTES);
+  assert.equal(porterait.peut, true, "la fixture n'attend pas de proposition");
+
+  const entete = renderLeGesteDuLotEnEntete(porterait);
+  const basDuTableau = renderLeTableauDesDocuments({ documents: QUI_ATTENDENT });
+
+  assert.deepEqual(lesGestesEmis(entete), [PORTER_LE_LOT]);
+  assert.deepEqual(lesGestesEmis(basDuTableau), [PORTER_LE_LOT]);
+
+  // Le mot de l'en-tête est celui du geste, partout ailleurs dans l'écran.
+  assert.match(entete, new RegExp(escapeHtml(LE_MOT_DU_GESTE)));
+  // Et le bas, qui a la place, dit combien : c'est ce qu'on vérifie avant de
+  // cliquer.
+  assert.match(basDuTableau, /Transformer ces 2 documents/);
+});
+
+test("éteint, le geste de l'en-tête dit ce qui lui manque", () => {
+  /**
+   * C'est tout le défaut en une ligne : **un bouton gris sans infobulle est
+   * indistinguable d'un bouton cassé** (règle 5). Les lectures ci-dessous ont
+   * été lues mais ne citent aucun document de Fichiers.
+   */
+  const sansDocument = lesDocumentsDuTableau({
+    analyses: lesDocumentsAnalyses({
+      crs: [{
+        id: "c-8", document: "CR_18.pdf", numero_de_reunion: "18", tenue_le: "2026-04-30",
+        created_at: "2026-09-30T10:00:00Z", mesures: { points: 4 }
+      }]
+    })
+  });
+
+  const porterait = ceQuUneSeulePropositionPorterait(sansDocument, TOUTES);
+  assert.equal(porterait.pourquoiPas, POURQUOI_PAS_DE_LOT.SANS_DOCUMENT);
+
+  const html = renderLeGesteDuLotEnEntete(porterait);
+  assert.match(html, /disabled/);
+  // Éteint, il n'émet rien : un geste émis sous un bouton mort partirait au
+  // clavier.
+  assert.deepEqual(lesGestesEmis(html), []);
+  // Et il porte la phrase du refus, et non une infobulle vide.
+  assert.match(html, new RegExp(escapeHtml(CE_QUE_LE_REFUS_DIT[POURQUOI_PAS_DE_LOT.SANS_DOCUMENT])));
+});
+
+test("pendant la composition, l'en-tête n'émet plus le geste", () => {
+  // Deux départs ouvriraient deux propositions, chacune avec la moitié des
+  // lignes. L'écran éteint le bouton ; la garde du gestionnaire est l'autre
+  // moitié de la réponse.
+  const porterait = ceQuUneSeulePropositionPorterait(QUI_ATTENDENT, TOUTES);
+  const html = renderLeGesteDuLotEnEntete(porterait, { enCours: true, etape: null });
+
+  assert.deepEqual(lesGestesEmis(html), []);
+  assert.match(html, /disabled/);
+  // Et il renvoie où l'avancement se lit : en haut il n'y a pas la place.
+  assert.match(html, /sous le tableau/);
+});
+
+test("un départ refusé se lit sous le tableau, et le bouton reste", () => {
+  /**
+   * Les deux refus du gestionnaire sortaient sur un `return` nu. Le lot ne
+   * partait pas, l'écran ne bougeait pas, et rien ne disait lequel avait parlé.
+   *
+   * Le refus s'affiche donc **au repos** — ni pendant, ni à la place du bilan —
+   * et le bouton reste : un refus qui emporterait le geste obligerait à
+   * recharger la page pour réessayer.
+   */
+  const refuse = renderLeTableauDesDocuments({
+    documents: QUI_ATTENDENT,
+    portage: { enCours: false, bilan: null, proposition: null, raison: "Rien n'est parti : essai." }
+  });
+
+  assert.match(refuse, /Rien n&#39;est parti : essai\./);
+  assert.deepEqual(lesGestesEmis(refuse), [PORTER_LE_LOT]);
+
+  // Et sans refus, rien ne s'affiche : une phrase qui paraît toujours ne se lit
+  // jamais.
+  const auRepos = renderLeTableauDesDocuments({ documents: QUI_ATTENDENT });
+  assert.doesNotMatch(auRepos, /documents-attente__refus/);
 });

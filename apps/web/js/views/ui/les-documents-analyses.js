@@ -24,6 +24,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderAttenteSpinner } from "./spinner.js";
+import { LE_MOT_DU_GESTE } from "./transformer.js";
 import { renderNavList, renderNavListGroup, renderNavListItem } from "./nav-list.js";
 import { renderProjectRail } from "./project-rail.js";
 import {
@@ -322,11 +323,26 @@ function renderCeQuiAttendUneProposition(porterait, portage, deLaFamille) {
 
   const bouton = ceQueLeBoutonDuLotDit(porterait);
   const familles = lesFamillesDuLot(porterait);
+  /**
+   * **Le clic qui n'a rien lancé le dit ici, et le bouton reste.**
+   *
+   * Le gestionnaire sortait sur un `return` nu quand le lot s'était vidé entre
+   * le dessin et le clic, ou quand le chantier n'avait pas pu être résolu :
+   * l'écran ne bougeait pas, et il n'y avait rien à lire. Un clic sans effet
+   * visible ne se distingue pas d'un bouton mort (règle 5).
+   *
+   * Il s'affiche **au repos**, à côté du bouton et non à sa place : un refus qui
+   * emporterait le geste obligerait à recharger la page pour réessayer.
+   */
+  const refus = texte(portage?.raison);
 
   return `
     <div class="documents-attente">
       <div class="documents-attente__dit">
         <p class="documents-attente__phrase">${escapeHtml(porterait.dit)}</p>
+        ${refus
+          ? `<p class="documents-attente__refus forme-manques">${escapeHtml(refus)}</p>`
+          : ""}
         ${familles.length > 1
           ? `<p class="documents-attente__familles mono-small">${escapeHtml(
               familles.map((une) => `${une.combien} ${une.nom}`).join(" · "))}</p>`
@@ -352,6 +368,66 @@ function renderCeQuiAttendUneProposition(porterait, portage, deLaFamille) {
         ${svgIcon("git-pull-request", { className: "octicon" })} ${escapeHtml(bouton.libelle)}
       </button>
     </div>
+  `;
+}
+
+/**
+ * Le geste du lot, **dans la ligne du titre**.
+ *
+ * ## Pourquoi il existe en plus de celui du bas
+ *
+ * > « quand je clic sur transformer depuis analyse de documents, il ne se
+ * >   passe rien. »
+ *
+ * Il ne se passait rien parce que le « Transformer » de l'en-tête est celui
+ * d'un **document ouvert** : il transforme la lecture qu'on regarde. À
+ * l'accueil, où l'on regarde le tableau et non un document, il était donc
+ * éteint — gris, sans infobulle, sans rien à lire. Un bouton éteint qui
+ * n'explique pas ce qui lui manque est indistinguable d'un bouton cassé
+ * (règle 5), et c'est exactement ce qu'il a été pris pour.
+ *
+ * Le geste qui a un sens à l'accueil est le lot : « une seule proposition pour
+ * tout ce qui a été lu depuis la dernière ». Il vivait en bas du tableau, où
+ * la phrase l'explique — c'est sa place, et il y reste. Mais la main va
+ * d'abord en haut à droite, où les gestes de tous les écrans sont, et c'est
+ * là que le clic est parti.
+ *
+ * ## Il ne redit pas le geste, il le porte
+ *
+ * Même `data-attente-action`, même `ceQueLeBoutonDuLotDit` : l'aiguillage ne
+ * voit qu'un geste, et les deux boutons s'allument et s'éteignent ensemble.
+ * Deux chemins vers la même composition auraient fini par ne plus composer
+ * pareil (règle 10). Ce qui diffère est le seul libellé : l'en-tête n'a pas la
+ * largeur de « Transformer ces douze documents », et le mot vient de là où le
+ * geste est nommé pour tous les écrans.
+ */
+export function renderLeGesteDuLotEnEntete(porterait = null, portage = null) {
+  /**
+   * **Pendant la composition, il s'éteint et le dit.** Le bloc du bas nomme
+   * l'étape ; en haut on n'a la place que de dire que ça tourne, et c'est
+   * suffisant — ce qui compte ici est qu'un second clic ne parte pas.
+   */
+  if (portage?.enCours) {
+    return `<button type="button" class="gh-btn gh-btn--sm" disabled
+      title="Une composition est en cours. Son avancement est sous le tableau.">
+      ${renderAttenteSpinner()} ${escapeHtml(LE_MOT_DU_GESTE)}
+    </button>`;
+  }
+
+  const bouton = ceQueLeBoutonDuLotDit(porterait);
+
+  return `
+    ${/*
+      **La même teinte que celui du bas, et non le vert plein.** `gh-btn--primary`
+      est pris par « + Documents », qui est juste à côté : deux verts pleins sur
+      la même ligne ne disent plus lequel est l'action principale. Et les deux
+      boutons du même geste doivent se reconnaître l'un l'autre.
+    */""}
+    <button type="button" class="gh-btn gh-btn--sm${bouton.ouvert ? " gh-btn--validate" : ""}"
+      ${bouton.ouvert ? `data-attente-action="${PORTER_LE_LOT}"` : "disabled"}
+      title="${escapeHtml(bouton.titre)}">
+      ${svgIcon("git-pull-request", { className: "octicon" })} ${escapeHtml(LE_MOT_DU_GESTE)}
+    </button>
   `;
 }
 

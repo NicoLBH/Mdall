@@ -70,14 +70,14 @@ import {
   TRIER_LES_DOCUMENTS, laFamilleDesignee,
   leDocumentDesigne,
   PORTER_LE_LOT, RELIRE_LA_PROPOSITION,
-  renderLeRailDesFamilles, renderLeTableauDesDocuments
+  renderLeGesteDuLotEnEntete, renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "../../ui/les-documents-analyses.js";
 import {
   FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses, lesDocumentsDuTableau,
   lesDocumentsEnAttente, parFamille
 } from "../../../services/les-documents-analyses.js";
 import {
-  ceQuUneSeulePropositionPorterait
+  POURQUOI_LE_DEPART_EST_REFUSE, ceQuUneSeulePropositionPorterait, phraseDuDepartRefuse
 } from "../../../services/ce-qui-attend-une-proposition.js";
 import { leBilanDuLot } from "../../../services/la-propo-dun-lot.js";
 import {
@@ -800,6 +800,21 @@ export function renderLaLecture(vue = etat) {
         })}
         <div class="project-rail-layout__content">
       ${renderEntete(vue)}
+      ${/*
+        **L'alerte est sous l'en-tête, et elle y est pour toutes les phases.**
+
+        Elle vivait dans `renderCorps`, qui ne dessine rien quand la phase est
+        « vide » : un refus posé depuis l'accueil — « il n'y a rien à proposer
+        pour l'instant » — s'écrivait dans l'état, l'écran se redessinait, et
+        **rien n'apparaissait**. Un message qui n'a nulle part où s'afficher
+        est un message qu'on n'a pas écrit (règle 5) : c'est ce qui a fait
+        passer un bouton éteint pour un bouton cassé.
+
+        Elle reste au-dessus de tout ce qui peut la motiver — la porte, le
+        tableau, les onglets d'une lecture — parce qu'une panne annoncée sous
+        ce qu'elle concerne se lit après coup.
+      */""}
+      ${renderAlerte(vue)}
       ${
         // **Deux états, et un seul se montre à la fois.** Le choix quand on
         // sélectionne, le dépôt sinon. Les superposer donnerait deux façons de
@@ -929,20 +944,53 @@ async function lesAnalysesEntieres(projet) {
  * clavier.
  */
 async function porterLeLot(hote) {
-  if (etat.portage?.enCours) return;
+  const depart = leDepartDuLot(etat);
+  if (!depart.part) {
+    /**
+     * **Un motif vide est un refus déjà dit** : c'est le second départ pendant
+     * qu'une composition tourne, et l'écran l'affiche avec son étape. Lui
+     * répondre une phrase par-dessus ferait lire un échec sur ce qui avance.
+     */
+    if (depart.pourquoi) refuserLeDepart(hote, depart.pourquoi);
+    return;
+  }
 
-  const documents = lesDocumentsDeLaVue(etat);
-  const porterait = ceQuUneSeulePropositionPorterait(
-    parFamille(documents ?? [], etat.famille), etat.famille
-  );
-  if (!porterait.peut) return;
+  const { porterait } = depart;
 
   etat.portage = { enCours: true, etape: null, bilan: null, proposition: null, raison: "" };
-  redessiner(hote);
 
-  const projectId = texte(await projetCourant());
-
+  /**
+   * **Tout ce qui suit est sous le `try`, le premier redessin compris.**
+   *
+   * `enCours` vient d'être posé, et c'est la garde qui empêche un second
+   * départ. Une exception qui s'échapperait d'ici la laisserait posée **pour
+   * toute la session** : le bouton répondrait alors à chaque clic par le
+   * `return` muet du dessus, et plus rien ne repartirait jamais. Le
+   * gestionnaire est appelé en `void` depuis le clic, donc ce rejet n'aurait
+   * même pas d'écho — « il ne se passe rien », définitivement.
+   *
+   * Deux choses étaient dehors, et les deux pouvaient lever : le redessin, qui
+   * reconstruit l'écran entier et le rebranche, et la résolution du chantier.
+   * Toute sortie de ce bloc remet donc `enCours` à `false` — c'est vrai des
+   * deux `return` de refus, du chemin normal et du `catch`.
+   */
   try {
+    redessiner(hote);
+
+    /**
+     * **Le chantier, et le refus quand il n'y en a pas.**
+     *
+     * `projetCourant()` rend la chaîne vide quand la résolution échoue — hors
+     * ligne, ou session expirée. Partir quand même ouvrait une proposition
+     * sans propriétaire : la base la refusait, et le message parlait d'une
+     * contrainte au lieu de dire quoi faire.
+     */
+    const projectId = texte(await projetCourant());
+    if (!projectId) {
+      refuserLeDepart(hote, POURQUOI_LE_DEPART_EST_REFUSE.SANS_CHANTIER);
+      return;
+    }
+
     const { porterLeLotDansUneProposition } = await import(
       "../../../services/la-propo-dun-lot-supabase.js"
     );
@@ -990,6 +1038,33 @@ async function porterLeLot(hote) {
    */
   await chargerLesLecturesGardees(hote);
   if (hote?.isConnected) redessiner(hote);
+}
+
+/**
+ * Dire pourquoi le clic n'a rien lancé.
+ *
+ * **Un clic doit toujours produire un effet visible** (règle 5). Les deux
+ * refus sortaient sur un `return` nu : le lot ne partait pas, l'écran ne
+ * bougeait pas, et rien — ni à l'écran ni dans la console — ne disait lequel
+ * des deux avait parlé. C'est indistinguable d'un bouton qui n'est pas branché,
+ * et c'est ce qui a été rapporté.
+ *
+ * La phrase vient du service, avec les motifs : l'écran ne compose pas de
+ * texte, et un motif ajouté là-bas arrive ici avec sa phrase (règle 10).
+ *
+ * **`enCours` retombe à `false` ici**, quel que soit le refus. C'est ce qui
+ * rend un second essai possible — et c'est la même remise à zéro pour les deux
+ * motifs, donc elle vit à un seul endroit (règle 4).
+ */
+function refuserLeDepart(hote, pourquoi) {
+  etat.portage = {
+    enCours: false,
+    etape: null,
+    bilan: null,
+    proposition: null,
+    raison: phraseDuDepartRefuse(pourquoi)
+  };
+  redessiner(hote);
 }
 
 /**
@@ -1339,6 +1414,102 @@ function renderLeDetailDunRapportDansSaCoquille(vue, ouvert) {
  * n'a pas eu lieu proposerait une liste vide, et il n'y a rien de plus difficile
  * à comprendre qu'une proposition qui ne propose rien.
  */
+/**
+ * Ce que le clic sur le geste du lot ferait, **et pourquoi il ne ferait rien.**
+ *
+ * ## Pourquoi c'est une fonction, et non trois lignes dans le gestionnaire
+ *
+ * Elles y étaient, et elles sortaient sur deux `return` nus : rien ne partait,
+ * l'écran ne bougeait pas, et aucun test ne pouvait les atteindre — le
+ * gestionnaire demande un navigateur, un chantier et une base. Un aiguillage
+ * qu'on ne peut pas faire tomber exprès n'est pas gardé, et c'est précisément
+ * celui-ci qui a lâché.
+ *
+ * Ici, il se décide sur un état d'écran et rien d'autre : `pourquoi` se lit, se
+ * casse et se reprouve.
+ *
+ * ## Les trois issues
+ *
+ *  - **il part** — le lot existe, et rien ne tourne déjà ;
+ *  - **il ne part pas, et c'est déjà dit** — une composition est en cours, et
+ *    l'écran l'affiche avec son étape. Le motif est vide : une phrase de refus
+ *    par-dessus ferait lire un échec sur quelque chose qui avance ;
+ *  - **il ne part pas, et il faut le dire** — le lot s'est vidé entre le dessin
+ *    et le clic.
+ *
+ * Le lot se recompose **ici**, au moment du clic, sur le tableau courant : la
+ * plus mauvaise façon de se tromper serait de reverser ce qui vient d'être
+ * versé.
+ *
+ * @param {object} [vue] l'état de l'écran
+ * @returns {{part: boolean, porterait: object, pourquoi: string}}
+ */
+export function leDepartDuLot(vue = etat) {
+  const porterait = ceQuUneSeulePropositionPorterait(
+    parFamille(lesDocumentsDeLaVue(vue) ?? [], vue.famille), vue.famille
+  );
+
+  if (vue.portage?.enCours) return { part: false, porterait, pourquoi: "" };
+
+  if (!porterait.peut) {
+    return {
+      part: false, porterait, pourquoi: POURQUOI_LE_DEPART_EST_REFUSE.PLUS_RIEN_A_PORTER
+    };
+  }
+
+  return { part: true, porterait, pourquoi: "" };
+}
+
+/**
+ * Le geste de transformation de la ligne de titre — **et il n'est pas le même
+ * selon ce qu'on regarde.**
+ *
+ * ## Deux écrans dans un, et deux gestes
+ *
+ * Un **document ouvert** se transforme lui-même : ouvrir un sujet, faire une
+ * proposition, ajouter à une proposition ouverte. C'est `renderTransformer`,
+ * et son menu parle de ce document-là.
+ *
+ * L'**accueil** ne montre aucun document : il montre le tableau de tout ce qui
+ * a été analysé. Ce qui s'y transforme est le **lot** — tout ce qui a été lu
+ * depuis la dernière proposition —, et le menu du document n'a rien à y faire :
+ * « Ouvrir un sujet » n'aurait pas de sujet, « Ajouter à » pas de contenu.
+ *
+ * ## Ce qu'il y avait avant, et pourquoi c'était un défaut
+ *
+ * Le menu du document s'affichait dans les deux cas, simplement **éteint** à
+ * l'accueil — `pret` vaut `vue.phase === "lue" && vue.lecture`. On avait donc,
+ * en haut à droite d'un écran qui porte dix-huit documents analysés, un bouton
+ * « Transformer » gris et muet. Cliqué, il ne faisait rien, et ne pouvait rien
+ * dire : le message de refus se pose dans l'alerte, que `renderCorps` ne
+ * dessine pas quand la phase est « vide ». Un refus écrit là où rien ne
+ * l'affiche ne vaut pas mieux qu'un `return` nu (règle 5).
+ *
+ * ## Une lecture rouverte n'a aucun des deux
+ *
+ * Elle est gelée, et c'est dit plus haut : ses rapprochements sont ceux du jour
+ * où elle a eu lieu.
+ */
+function renderLeGesteDeLentete(vue, pret) {
+  if (vue.conservee) return "";
+
+  /**
+   * **L'accueil est la seule phase qui porte le tableau** — c'est la condition
+   * de `renderLesDocumentsAnalyses`, et le bouton doit s'allumer exactement
+   * quand le lot existe, donc exactement là. Un choix de fichiers ouvert
+   * par-dessus n'est pas l'accueil : on y coche, on n'y transforme pas.
+   */
+  if (vue.phase === "vide" && !vue.ouvertAilleurs && !vue.fichier && !vue.choix) {
+    return renderLeGesteDuLotEnEntete(leDepartDuLot(vue).porterait, vue.portage);
+  }
+
+  return renderTransformer({
+    id: "lectureCrTransformer",
+    disabled: !pret || vue.versement?.enCours === true,
+    ouvertes: vue.branches
+  });
+}
+
 function renderEntete(vue = etat) {
   const pret = vue.phase === "lue" && Boolean(vue.lecture);
 
@@ -1448,12 +1619,7 @@ function renderEntete(vue = etat) {
               }))}"
               aria-label="Exporter tout ce que cet écran sait"
             >${svgIcon("download", { className: "octicon" })}</button>`}
-          ${
-            vue.conservee ? "" : renderTransformer({
-              id: "lectureCrTransformer",
-              disabled: !pret || vue.versement?.enCours === true,
-              ouvertes: vue.branches
-            })}
+          ${renderLeGesteDeLentete(vue, pret)}
         </div>
       </div>
       ${renderVersement(vue.versement)}
@@ -1633,7 +1799,6 @@ function renderCorps(vue) {
       // rien de plus que l'autre.
       vue.lecture ? "" : renderFichierRecu(vue)
     }
-    ${renderAlerte(vue)}
     ${vue.lecture ? renderIdentite(vue.lecture) : ""}
     ${
       /**
