@@ -42,6 +42,8 @@
  */
 
 import { lignesDeLAssertion } from "../project-memoire-fichiers.js";
+import { ceQuUnBlocRelie } from "../../services/les-crans-de-la-traduction.js";
+import { estUneRegle } from "../../services/assertion-taxonomy.js";
 import { CHANGEMENT, affirmationsDUneProposition } from "../../services/proposition-avant-apres.js";
 import { cleDuSujet } from "../../services/memoire-identifiants.js";
 import { itemsAPorter } from "../../services/atelier-proposition.js";
@@ -172,7 +174,24 @@ export function blocsDeLaProposition(lignes = [], { ouEcrit = null, auteurs = nu
       // ne crée pas (règle 10).
       fichier: texte(ligne?.rangement?.fichier) || texte(ligne?.rangement),
       lignes: [],
-      sansBloc: ""
+      sansBloc: "",
+      /**
+       * **Ce qui permet de ranger ce bloc par cran, posé ici et nulle part
+       * ailleurs.**
+       *
+       * Le cran d'un bloc se lit sur sa nature et sur `referentiel` — c'est-à-
+       * dire sur la **charge**, qui n'est en main qu'ici. Le laisser deviner par
+       * l'écran l'aurait fait lire sur le rendu : une règle se reconnaîtrait à
+       * la présence d'une ligne `regle` dans son code, ce qui marche jusqu'au
+       * jour où l'écrivain change une ligne de forme.
+       *
+       * Trois champs seulement, et tous additifs : les trois appelants existants
+       * ne les lisent pas et n'en souffrent pas.
+       */
+      nature: texte(ligne?.porteur?.nature) || texte(ligne?.porteur?.payload?.nature),
+      regle: false,
+      lit: [],
+      produit: []
     };
 
     // **Un retrait n'a pas de bloc, il en retire un.** Écrire le code de ce qui
@@ -184,7 +203,18 @@ export function blocsDeLaProposition(lignes = [], { ouEcrit = null, auteurs = nu
     const affirmation = commeUneAffirmation(ligne?.porteur);
     if (!affirmation) return { ...socle, sansBloc: SANS_BLOC.RIEN };
 
-    return { ...socle, lignes: lignesDeLAssertion(affirmation, 0, { ouEcrit: registre, auteurs }) };
+    return {
+      ...socle,
+      // `estUneRegle` et non `payload.referentiel`, parce que c'est elle qui
+      // porte ce test pour toute la mémoire. Un quatrième `=== true` écrit ici
+      // serait la copie qu'on ne relit jamais (règle 10).
+      regle: estUneRegle(affirmation),
+      // Ce que ce bloc lit et conclut : les mêmes deux fonctions que le graphe
+      // des dépendances de la mémoire. Un second calcul aurait dessiné une
+      // chaîne que la Mémoire ne montre pas (règle 4).
+      ...ceQuUnBlocRelie(affirmation),
+      lignes: lignesDeLAssertion(affirmation, 0, { ouEcrit: registre, auteurs })
+    };
   });
 }
 

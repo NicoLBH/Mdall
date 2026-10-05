@@ -28,6 +28,9 @@ import { affirmationsDUneProposition } from "../../services/proposition-avant-ap
 import { motDeLaNature } from "../../services/proposition-review.js";
 import { renderLignesDeCode } from "./code-mdall.js";
 import { PHRASES_SANS_BLOC, blocsAOuvrir } from "./mdall-de-la-proposition.js";
+import {
+  CRAN, ceQueLaTraductionDit, leCranDit, lesBlocsParCran, lesCheminsEntreBlocs
+} from "../../services/les-crans-de-la-traduction.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -39,14 +42,94 @@ export const SOUS_LE_TITRE = {
   A_PROPOSER: "Ce que la proposition écrira, si elle est signée. Rien n'est demandé tant qu'on n'a pas cliqué."
 };
 
-/** Les blocs seuls, sans cadre — pour un écran qui a déjà le sien. */
+/**
+ * Les blocs seuls, sans cadre — **rangés par cran de la traduction**.
+ *
+ * ## Le défaut que cela répare
+ *
+ * Les blocs arrivaient à la suite, dans l'ordre du tableau. On voyait donc le
+ * PDF, puis du Mdall, et les quatre crans entre les deux n'étaient nommés
+ * nulle part : la transcription avait l'air d'un tour de magie, et un tour de
+ * magie n'est pas rassurant — il est inquiétant
+ * (`docs/montrer-le-raisonnement.md`, D2).
+ *
+ * ## Groupé ici, donc partout d'un coup
+ *
+ * Ce panneau est **le seul** : l'onglet Changements d'une proposition, le
+ * Copilote, la lecture des comptes rendus et celle des fils de mails l'emploient
+ * tous les quatre. Les quatre gagnent les crans par ce seul changement, et
+ * aucun n'a eu à être retouché (règle 4).
+ *
+ * ## Un cran vide se nomme
+ *
+ * C'est la règle qui fait tout l'intérêt du groupement : sans elle, grouper ne
+ * déplacerait que des cartes. « Aucune contrainte dans ce document » est une
+ * information sur le document ; un groupe absent se lit « cela va de soi »
+ * (règle 12).
+ */
 export function renderBlocsMdall(blocs = []) {
   const tous = Array.isArray(blocs) ? blocs : [];
   if (!tous.length) return "";
 
   const ouverts = blocsAOuvrir(tous);
+  const { groupes, sansCran } = lesBlocsParCran(tous);
+  const chemins = lesCheminsEntreBlocs(tous);
 
-  return `<div class="mdall-blocs">${tous.map((bloc) => `
+  return `
+    <p class="synthese__mot">${escapeHtml(ceQueLaTraductionDit(tous))}</p>
+    ${groupes.map((cran) => renderUnCran(cran, ouverts)).join("")}
+    ${renderLesChemins(chemins)}
+    ${sansCran.length ? renderUnCran({
+      rang: 0,
+      libelle: "Le reste",
+      question: "Qu'est-ce que la lecture n'a pas su ranger ?",
+      // **Ils sortent à part, et on dit pourquoi.** Les fondre dans un cran les
+      // ferait compter dans un groupe qui annonce autre chose qu'eux.
+      dou: "Des lignes de suivi — un document qui entre au corpus, un lot — et "
+        + "celles dont la nature ne dit pas ce qu'elles sont. Elles n'affirment "
+        + "rien sur l'ouvrage.",
+      blocs: sansCran,
+      estVide: false,
+      vide: ""
+    }, ouverts) : ""}
+  `;
+}
+
+/**
+ * Un cran : son nom, sa question, ses blocs, et d'où il vient.
+ *
+ * ## Aucune classe neuve, et ce n'est pas une contrainte subie
+ *
+ * `forme-suite` donne déjà exactement cette forme — une colonne, un filet en
+ * haut, un titre —, et c'est celle des bilans de la console. Un `mdall-cran`
+ * à nous aurait été un sixième jeu de marges à recalibrer au premier réglage
+ * de l'autre.
+ *
+ * ## La question est dans le titre, et non en bas
+ *
+ * En bas, elle se lit après le code — donc trop tard : on a déjà cherché à
+ * comprendre sans savoir ce qu'on regardait. Ce qui vient en bas est `dou`, qui
+ * explique le cran et n'est pas nécessaire pour lire le code.
+ */
+function renderUnCran(cran, ouverts) {
+  return `
+    <section class="forme-suite">
+      <h4 class="forme-suite__titre">${cran.rang ? `${cran.rang}. ` : ""}${
+        escapeHtml(cran.libelle)}${cran.blocs.length
+          ? ` <span class="review-block__count">${cran.blocs.length}</span>`
+          : ""}</h4>
+      <p class="conso-usages__mot">${escapeHtml(cran.question)}</p>
+      ${cran.estVide
+        ? `<p class="review-empty-note">${escapeHtml(cran.vide)}</p>`
+        : `<div class="mdall-blocs">${cran.blocs.map((bloc) => renderUnBloc(bloc, ouverts))
+            .join("")}</div>`}
+      <p class="conso-usages__mot">${escapeHtml(cran.dou)}</p>
+    </section>
+  `;
+}
+
+function renderUnBloc(bloc, ouverts) {
+  return `
     <details class="mdall-bloc"${ouverts.has(bloc.cle) ? " open" : ""}>
       <summary class="mdall-bloc__tete">
         <span class="mdall-bloc__sujet">${escapeHtml(bloc.sujet)}</span>
@@ -58,7 +141,37 @@ export function renderBlocsMdall(blocs = []) {
           : renderLignesDeCode(bloc.lignes)
       }
     </details>
-  `).join("")}</div>`;
+  `;
+}
+
+/**
+ * Le quatrième cran : **les chemins entre fonctions, en liste.**
+ *
+ * En liste et non en graphe, et c'est un choix : une liste se lit sans avoir
+ * appris à lire un graphe, et c'est le lecteur qu'on vise — quelqu'un qui n'a
+ * jamais codé et qui n'en a pas envie. Le graphe viendra si la liste ne suffit
+ * pas.
+ *
+ * C'est la seule chose de cet écran qu'**aucun document n'écrit** : elle naît
+ * de la rencontre de deux fonctions, et c'est exactement ce que la mémoire
+ * existe pour produire.
+ */
+function renderLesChemins(chemins) {
+  const cran = leCranDit(CRAN.CHEMIN);
+
+  return `
+    <section class="forme-suite">
+      <h4 class="forme-suite__titre">${cran.rang}. ${escapeHtml(cran.libelle)}${
+        chemins.length ? ` <span class="review-block__count">${chemins.length}</span>` : ""}</h4>
+      <p class="conso-usages__mot">${escapeHtml(cran.question)}</p>
+      ${chemins.length
+        ? `<ul class="conso-usages__liste">${chemins.map((un) => `
+            <li><p class="forme-suite__dit">${escapeHtml(un.dit)}</p></li>
+          `).join("")}</ul>`
+        : `<p class="review-empty-note">${escapeHtml(cran.vide)}</p>`}
+      <p class="conso-usages__mot">${escapeHtml(cran.dou)}</p>
+    </section>
+  `;
 }
 
 /**

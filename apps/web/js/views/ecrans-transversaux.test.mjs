@@ -1496,3 +1496,44 @@ test("le menu de l'avatar n'ouvre la console que pour celui à qui elle est ouve
   const barre = source.slice(source.indexOf("export function renderGlobalHeader()"));
   assert.match(barre, /demanderLaPorteDeLaConsole\(\);/);
 });
+
+/**
+ * **Le Mdall passe devant le diff, et rien n'exécute cet ordre.**
+ *
+ * `renderChanges` n'est pas exportée, et `project-propositions.js` ne s'importe
+ * pas — il parle à la base. Le banc des écrans, lui, n'évalue que le corps de
+ * premier niveau d'un module : il ne rend aucun onglet.
+ *
+ * L'ordre de deux sections dans cette fonction est donc un **défaut invisible
+ * et précis** : le seul signal est le navigateur. C'est le cas où lire la source
+ * comme du texte se justifie — et c'est ce que fait déjà l'épreuve du tableau
+ * partagé, au-dessus.
+ *
+ * Deux choses à tenir, et la seconde est structurelle : le panneau était dans
+ * `diff-corps`, la colonne que l'arbre de gauche commande. Un clic sur un nœud
+ * de l'arbre l'aurait masqué.
+ */
+test("dans Changements, le Mdall vient avant le diff et hors de sa colonne", async () => {
+  const source = await readFile(new URL("./project-propositions.js", import.meta.url), "utf8");
+
+  const debut = source.indexOf("function renderChanges(");
+  assert.ok(debut > 0, "renderChanges a été renommée : cette épreuve ne garde plus rien");
+  // Jusqu'à la fonction suivante, pour ne pas lire un autre onglet par mégarde.
+  const fin = source.indexOf("\nfunction ", debut + 1);
+  const corps = source.slice(debut, fin > debut ? fin : undefined);
+
+  const mdall = corps.indexOf("renderMdallDeLaProposition(review.avantApres)");
+  const barre = corps.indexOf('<div class="diff-barre">');
+  const layout = corps.indexOf('<div class="diff-layout');
+
+  assert.ok(mdall > 0, "le Mdall ne se dessine plus dans l'onglet Changements");
+  assert.ok(barre > 0 && layout > 0, "le diff ne se dessine plus");
+  assert.ok(mdall < barre,
+    "le diff repasse devant le Mdall : on signerait après avoir lu ce qui bouge, "
+    + "sans avoir lu pourquoi");
+  assert.ok(mdall < layout, "le Mdall est retourné dans la colonne de l'arbre du diff");
+
+  // Et le diff garde un titre qui dit ce qu'il est : sans titre, un tableau
+  // placé après le Mdall se lit comme sa suite.
+  assert.match(corps, /Ce qui bouge, valeur par valeur/);
+});

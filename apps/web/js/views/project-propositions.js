@@ -4036,6 +4036,29 @@ function renderChanges(proposition, review) {
 
   return `
     ${arbitrages}
+
+    ${/*
+      **Le Mdall passe devant le diff, et l'ordre n'est pas un détail.**
+
+      Il vivait dans `diff-corps`, après les groupes du diff : on lisait donc
+      d'abord un tableau de valeurs, puis, plus bas et replié, le raisonnement.
+      L'ordre dit ce qui compte, et il disait l'inverse de la promesse du
+      produit — on signait une décision après avoir lu ce qui bouge, sans avoir
+      lu pourquoi (`docs/montrer-le-raisonnement.md`, D1).
+
+      Il sort aussi de `diff-corps` **pour une raison de structure** : l'arbre de
+      gauche navigue dans les repères du diff, et il ne connaît aucun bloc Mdall.
+      Un panneau posé dans la colonne qu'il commande se serait retrouvé masqué
+      par un clic sur un nœud de l'arbre.
+    */""}
+    ${renderMdallDeLaProposition(review.avantApres)}
+
+    ${/*
+      **Et le diff garde sa place, sous un titre qui dit ce qu'il est.** Sans
+      titre, un tableau qui vient après le Mdall se lit comme sa suite ; c'est
+      une autre question — « qu'est-ce qui bouge » — et elle a sa valeur propre.
+    */""}
+    <h3 class="review-block__title">Ce qui bouge, valeur par valeur</h3>
     <div class="diff-barre">
       ${renderDiffReplieBouton()}
       <span class="diff-barre__resume">${escapeHtml(resumeDuDiff(diff.compte))}</span>
@@ -4046,7 +4069,6 @@ function renderChanges(proposition, review) {
       ${renderDiffTree(groupes, ouverte)}
       <div class="diff-corps">
         ${groupes.map(renderDiffGroupe).join("")}
-        ${renderMdallDeLaProposition(review.avantApres)}
       </div>
     </div>
     ${renderDiffCommentBox(proposition, review)}
