@@ -482,3 +482,157 @@ test("les crans n'inventent aucune classe", async () => {
       `« ${classe} » n'est pas dans la feuille de style : il faudrait la recalibrer à la main`);
   }
 });
+
+/* ── Les preuves du code, sous la fonction qu'elles éprouvent ────────────── */
+
+/**
+ * > « Voici le code ET voici les tests que nous avons réalisés sur le code…
+ * >   vous pouvez signer, tout est bien fait. »
+ *
+ * Le code se lisait déjà. Les essais sur ce code, non : on montrait une fonction
+ * et l'on demandait de la croire.
+ */
+test("une fonction montre ce qu'on a essayé, sous son code", () => {
+  const html = renderBlocsMdall(blocsAProposer([
+    { ...UNE_VALEUR, sujet: "Hauteur du dernier plancher", valeur: "26 m" },
+    UNE_REGLE
+  ], {}));
+
+  assert.match(html, /Ce que nous avons essayé/);
+
+  // Le cas du document : les entrées nommées, et ce que le document conclut.
+  assert.match(html, /les valeurs que ce document relève/);
+  assert.match(html, /Hauteur du dernier plancher = 26 m/);
+  assert.match(html, /le document conclut « 3ᵉ famille B »/);
+
+  // Le seuil : les deux côtés, en nombres.
+  assert.match(html, /Hauteur du dernier plancher &lt;= 28 m/);
+  assert.match(html, /28 m →/);
+  assert.match(html, /29 m →/);
+  assert.match(html, /Le seuil est écrit à 28 m\. Est-ce le bon \?/);
+});
+
+/**
+ * **Un seuil ne porte pas de marque de réussite**, et c'est la correction qui
+ * compte : l'attente qu'on en dériverait viendrait de l'opérateur qu'il éprouve.
+ */
+test("un seuil se marque « montre », jamais « conforme »", () => {
+  const html = renderBlocsMdall(blocsAProposer([
+    { ...UNE_VALEUR, sujet: "Hauteur du dernier plancher", valeur: "26 m" },
+    UNE_REGLE
+  ], {}));
+
+  assert.match(html, /bascule ici/);
+  // Et la phrase du haut le dit : les seuils montrent, ils ne passent pas.
+  assert.match(html, /montre où la fonction bascule/);
+  assert.match(html, /à vous de dire si c&#39;est le bon/);
+});
+
+/**
+ * **Une fonction qui appelle un utilitaire dit pourquoi elle ne se rejoue pas.**
+ *
+ * Sa loi n'est pas dans le projet, elle est au serveur. Une liste de cas vide
+ * se lirait « cette fonction a été vérifiée, et rien n'a été trouvé » (règle 5).
+ */
+test("une fonction native explique son silence, plutôt que de ne rien montrer", () => {
+  const html = renderBlocsMdall(blocsAProposer([{
+    sujet: "Spectre de calcul", valeur: "0,8 g", referentiel: true, domaine: "structure",
+    agent: { genre: "agent-D", utilitaire: "spectre", version: "1", lit: [], ecrit: [] },
+    provenance: { type: PROVENANCE.TEXTE, quoi: "EC8" }, statut: STATUT.RETENU, zones: []
+  }], {}));
+
+  assert.match(html, /sa loi n&#39;est pas écrite dans le projet/);
+  assert.match(html, /elle est au serveur/);
+  assert.doesNotMatch(html, /Ce que nous avons essayé/,
+    "une liste de cas vide se lit « vérifié, rien trouvé »");
+});
+
+test("une valeur n'a pas de section d'essais", () => {
+  // Une valeur n'a rien à rejouer, et une section vide sous chacune ferait
+  // chercher ce qui manque.
+  const html = renderBlocsMdall(blocsAProposer([UNE_VALEUR], {}));
+  assert.doesNotMatch(html, /Ce que nous avons essayé/);
+  assert.doesNotMatch(html, /Ce que ces essais ne prouvent pas/);
+});
+
+test("ce que les essais ne prouvent pas se dit une fois, et en bas", () => {
+  const html = renderBlocsMdall(blocsAProposer([
+    { ...UNE_VALEUR, sujet: "Hauteur du dernier plancher", valeur: "26 m" },
+    UNE_REGLE
+  ], {}));
+
+  // Une fois : répété sous chaque fonction, on cesserait de le lire.
+  assert.equal(html.split("Ce que ces essais ne prouvent pas").length - 1, 1);
+  // Et le plus désagréable est en premier.
+  assert.match(html, /Que la fonction soit juste/);
+  const ou = (quoi) => html.indexOf(quoi);
+  assert.ok(ou("Que la fonction soit juste") < ou("Que le seuil soit le bon"));
+  assert.ok(ou("Ce que nous avons essayé") < ou("Ce que ces essais ne prouvent pas"));
+});
+
+test("une entrée que le document ne dit pas se nomme, plutôt que « indécidable »", () => {
+  // La règle lit « Hauteur du dernier plancher », qu'aucune ligne ne porte.
+  // « Indécidable » tout court envoie chercher ; c'est le nom qu'on cherche.
+  const html = renderBlocsMdall(blocsAProposer([UNE_REGLE], {}));
+  assert.match(html, /il manque : Hauteur du dernier plancher/);
+  assert.match(html, /indécidable/);
+});
+
+/**
+ * **Dans la Synthèse d'un document, la transcription passe en tête.**
+ *
+ * Elle était l'item 3 de 4 : on lisait les liaisons employées, puis les idées,
+ * puis — plus bas — le Mdall, qui est *la* réponse à « qu'avez-vous compris de
+ * mon document ». L'ordre dit ce qui compte, et il mettait en premier le
+ * diagnostic du relevé.
+ */
+test("la Synthèse met le Mdall devant les liaisons et les idées", async () => {
+  const { renderLaSyntheseDunDocument } = await import("./la-synthese.js");
+
+  // La forme qu'une lecture garde réellement : `{avant, lien, apres, mot}`.
+  // Une fixture inventée aurait rendu une synthèse vide, et l'épreuve aurait
+  // vérifié l'ordre de rien.
+  const html = renderLaSyntheseDunDocument([
+    { avant: "terrain argileux", lien: "obligation", apres: "etude de sol", mot: "exige",
+      phrase: "Le terrain argileux exige une étude de sol.",
+      document: "1824_CR_12.pdf", page: 3 },
+    { avant: "nappe", lien: "cause", apres: "reprise", mot: "donc",
+      phrase: "La nappe est haute, donc une reprise est nécessaire.",
+      document: "1824_CR_12.pdf", page: 4 }
+  ], { quoi: "Ce compte rendu" });
+
+  const ou = (quoi) => {
+    const rang = html.indexOf(quoi);
+    assert.ok(rang >= 0, `introuvable dans la synthèse : ${quoi}`);
+    return rang;
+  };
+
+  // Le cadre titré, et sa phrase : rien n'est encore écrit.
+  assert.match(html, /Ce que nous avons compris de ce document/);
+  assert.match(html, /Rien n&#39;est demandé tant qu&#39;on n&#39;a pas cliqué/);
+
+  assert.ok(ou("Ce que nous avons compris de ce document") < ou("Les liaisons employées"),
+    "les liaisons repassent devant la transcription");
+});
+
+test("les essais n'inventent aucune classe non plus", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const style = readFileSync(
+    fileURLToPath(new URL("../../../style.css", import.meta.url)), "utf8");
+
+  const html = renderBlocsMdall(blocsAProposer([
+    { ...UNE_VALEUR, sujet: "Hauteur du dernier plancher", valeur: "26 m" },
+    UNE_REGLE
+  ], {}));
+
+  const classes = new Set([...html.matchAll(/class="([^"]+)"/g)]
+    .flatMap((un) => un[1].split(/\s+/))
+    .filter(Boolean));
+
+  assert.ok(classes.has("forme-reference"), "les essais ne reprennent pas la liste à assiette");
+  for (const classe of classes) {
+    assert.ok(style.includes(`.${classe}`), `« ${classe} » n'est pas dans la feuille de style`);
+  }
+});

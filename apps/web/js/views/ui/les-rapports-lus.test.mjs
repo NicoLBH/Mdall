@@ -558,3 +558,82 @@ test("un seul avis écarté se dit au singulier", () => {
   assert.match(renderLesAvisReleves({ ...UNE_LECTURE, avis: [], avisEcartes: 1 }),
     /1 avis a été relevé mais écarté/);
 });
+
+/* ── Ce que nous avons compris de ce rapport ──────────────────────────────── */
+
+/**
+ * **Un rapport se transcrit, et il ne le montrait pas.**
+ *
+ * Il avait deux onglets, et le commentaire disait pourquoi : « un rapport de
+ * contrôle ne relève pas d'idées ». C'est vrai de ses *idées*, et faux de ses
+ * *avis* — un avis est un constat, et un constat s'écrit en Mdall. On lisait
+ * donc un tableau d'avis sans jamais voir ce que la mémoire en ferait, dans le
+ * seul écran où ça compte : celui d'avant la proposition.
+ */
+test("un rapport montre ce que la mémoire écrirait de ses avis", () => {
+  const html = renderLeDetailDunRapport(
+    { lecture: UNE_LECTURE, conservee: { documentId: "doc-1" } },
+    { onglet: "mdall" }
+  );
+
+  assert.match(html, /Ce que nous avons compris de ce rapport/);
+  // La phrase du cadre dit que rien n'est écrit : c'est la contrepartie de tout
+  // montrer — plus on montre, plus on risque de laisser croire que c'est fait.
+  assert.match(html, /Rien n&#39;est demandé tant qu&#39;on n&#39;a pas cliqué/);
+
+  // Les trois avis du rapport, transcrits. C'est `avisDuRapport` qui le fait —
+  // la même que la proposition emploie, donc exactement ce qui serait versé.
+  for (const reference of ["A12", "A13", "A14"]) {
+    assert.ok(html.includes(reference), `l'avis ${reference} n'est pas transcrit`);
+  }
+
+  // Et ils sont au cran des données : un avis est un constat.
+  assert.match(html, /1\. Les données/);
+});
+
+test("un rapport sans avis transcriptible le dit, et ne se dit pas vide", () => {
+  const html = renderLeDetailDunRapport(
+    { lecture: { ...UNE_LECTURE, avis: [] } },
+    { onglet: "mdall" }
+  );
+
+  assert.match(html, /aucun avis transcriptible/);
+  // « Le rapport est vide » serait prêter le silence au document : c'est
+  // l'onglet Analyse qui dit ce qui a été relevé et ce que la porte a jeté.
+  assert.match(html, /Ce n&#39;est pas « le rapport est vide »/);
+  assert.match(html, /l&#39;onglet .?Analyse/);
+});
+
+/**
+ * **Les contrôles de la lecture se dessinent sur un rapport, après ses avis.**
+ *
+ * Avant, la liste se lirait sans savoir sur quoi elle porte ; tout en bas, on ne
+ * l'atteindrait pas. Elle vient donc juste après les avis, qui sont ce qu'elle
+ * vérifie.
+ */
+test("l'analyse d'un rapport dit ce qui a été vérifié de la lecture", () => {
+  const html = renderLeDetailDunRapport({ lecture: UNE_LECTURE }, { onglet: "analyse" });
+
+  assert.match(html, /Ce que nous avons vérifié de cette lecture/);
+  assert.match(html, /Chaque citation figure dans le document/);
+  assert.match(html, /Chaque date relevée figure dans le document/);
+
+  // Après les avis, et pas avant : la liste des contrôles ne se lit pas sans
+  // savoir sur quoi elle porte.
+  const ou = (quoi) => {
+    const rang = html.indexOf(quoi);
+    assert.ok(rang >= 0, `introuvable : ${quoi}`);
+    return rang;
+  };
+  assert.ok(ou("A12") < ou("Ce que nous avons vérifié de cette lecture"));
+});
+
+test("l'onglet de la transcription ne montre pas l'analyse, et l'inverse", () => {
+  const mdall = renderLeDetailDunRapport({ lecture: UNE_LECTURE }, { onglet: "mdall" });
+  const analyse = renderLeDetailDunRapport({ lecture: UNE_LECTURE }, { onglet: "analyse" });
+
+  // Chaque onglet répond à une question, et une seule : les mélanger ferait
+  // une page qu'on fait défiler.
+  assert.doesNotMatch(mdall, /rapport-legende/);
+  assert.doesNotMatch(analyse, /Ce que nous avons compris de ce rapport/);
+});

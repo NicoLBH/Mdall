@@ -334,8 +334,8 @@ Nommé, parce qu'un plan dont on ignore les trous se présente comme complet.
 ```
 Tour 1  les crans nommés            ✔ livré  ← le vocabulaire de tous les autres
 Tour 2  le Mdall devant le diff     ✔ livré  ← et groupé par cran partout d'un coup
-Tour 3  le Mdall à l'analyse                 ← le rapport BC, et le cadrage
-Tour 4  les preuves du code                  ← le plus de travail, il a besoin des crans
+Tour 3  le Mdall à l'analyse        ✔ livré  ← le rapport BC, et le cadrage
+Tour 4  les preuves                 ✔ livré  ← celles de la lecture, et celles du code
 Tour 6  le parcours                          ← en dernier : il raconte ce qui existe
 ```
 
@@ -351,14 +351,77 @@ raisons, découvertes en les écrivant :
    seul changement**, sans qu'aucun soit retouché (règle 4) — et le tour 3 s'est
    trouvé à moitié fait avant d'être commencé.
 
-Ce qui reste du tour 3 est donc plus étroit qu'annoncé : le **rapport de bureau
-de contrôle**, qui n'a pas de Synthèse, et le **cadrage** — une phrase qui dit
-« rien n'est encore écrit, voici ce qui serait versé » là où le mot *Synthèse*
-ne le dit pas.
+Ce qui restait du tour 3 était donc plus étroit qu'annoncé, et c'est ce qui a été
+fait : le **rapport de bureau de contrôle** a son onglet *Ce que nous avons
+compris*, et le Mdall d'un compte rendu passe en tête de sa Synthèse, dans le
+cadre titré qui dit que rien n'est encore écrit.
 
 ---
 
-## 9. Les trois décisions, et ce qu'elles ferment
+## 10. Le tour 4, et une correction qui compte
+
+### Les preuves de la lecture (Q1), rassemblées
+
+Quatre contrôles, chacun avec son assiette, au même endroit — sur un compte rendu
+comme sur un rapport, par le même composant :
+
+| | le contrôle | ce qu'il attrape |
+| --- | --- | --- |
+| 1 | la forme du document a été reconnue | tout le reste se fait sur la forme reconnue |
+| 2 | chaque citation figure dans le document | une phrase que personne n'a écrite |
+| 3 | chaque marque employée est dans la légende | un « F » dont on ignore le sens |
+| 4 | chaque date relevée figure dans le document | **le contrôle qui n'existait nulle part** |
+
+Le quatrième est le plus important pour la suite : une date range un constat dans
+le temps, et c'est là que la prédiction commence. Une date inventée déplace un
+fait sans que rien ne le montre — la chronologie reste plausible, et elle est
+fausse.
+
+**Un contrôle sans objet n'est ni un succès ni un échec**, et c'est la
+distinction qui décide de tout : une lecture dont aucun relevé ne porte de
+citation n'a pas « 100 % de citations retrouvées », elle n'a aucune citation à
+retrouver.
+
+Les deux premiers sont **exactement ceux que la batterie de perturbations pose**,
+et c'est le produit qui les tient désormais : la batterie les lui demande. Deux
+écritures de « cette citation figure-t-elle dans le document » auraient fini par
+ne plus répondre la même chose, et l'écran aurait dit vert là où la mesure disait
+rouge (règle 4) — sur l'indicateur que le produit met en avant.
+
+### Les preuves du code (Q2), sous chaque fonction
+
+Deux sources de cas, aucune écrite à la main :
+
+**Du document.** Chaque nom que la fonction lit prend la valeur que le document
+en dit ; on rejoue, et l'on compare à ce que le document conclut. Un écart est un
+vrai défaut. Le rejeu passe par `evaluerLaRegle` — celui du rejeu de la mémoire
+et du bac d'essai —, donc la preuve est celle du moteur et non d'un second
+évaluateur.
+
+**Des bornes.** Un seuil écrit `<= 28 m` s'essaie à 28 et à 29, et l'on montre ce
+que la fonction fait de chaque côté.
+
+> **Correction importante.** Le plan annonçait que la borne « attrape l'erreur de
+> comparaison stricte, un `<` écrit pour un `<=` ». **C'est faux**, et c'est la
+> batterie de mutations qui l'a montré : l'attente d'une borne était dérivée de
+> l'opérateur lui-même. Une règle écrite `< 28` s'essayait donc à 27 et 28, et
+> passait — en se donnant raison toute seule.
+>
+> Ce qu'une borne fait vraiment est plus utile, et honnête : elle montre, en deux
+> nombres concrets, **où la fonction bascule**. Celui qui lit sait, lui, si 28
+> doit être dedans — c'est son métier. **L'oracle est le lecteur**, et c'est tout
+> le propos de cet écran.
+>
+> Une borne ne compte donc ni dans les conformes ni dans les écarts. Les y mettre
+> gonflerait un taux avec des cas que personne n'a jugés, ce qui est la façon la
+> plus commode de se rassurer.
+
+Et ce que ces essais **ne** prouvent pas est écrit sous eux, une fois : une
+fonction fausse, recopiée fidèlement d'un document faux, les passe tous.
+
+---
+
+## 11. Les trois décisions, et ce qu'elles ferment
 
 | | la question | tranché |
 | --- | --- | --- |
@@ -366,4 +429,5 @@ ne le dit pas.
 | 2 | d'où viennent les cas de test ? | **du document et des bornes de la règle**, les deux |
 | 3 | les onglets se renomment-ils ? | **non** — les mots actuels sont justes |
 
-Plus rien n'est en attente d'une décision pour avancer.
+Plus rien n'est en attente d'une décision pour avancer. Le tour 6 — le parcours
+de démonstration — est le dernier, et il ne fait que raconter ce qui existe.

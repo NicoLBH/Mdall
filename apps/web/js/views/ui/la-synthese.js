@@ -43,7 +43,7 @@ import {
 import { phraseDunRaisonnement } from "../../services/un-raisonnement.js";
 import { itemsDeProposition } from "../../services/atelier-proposition.js";
 import { blocsAProposer } from "./mdall-de-la-proposition.js";
-import { renderBlocsMdall } from "./mdall-a-proposer.js";
+import { SOUS_LE_TITRE, renderMdallAProposer } from "./mdall-a-proposer.js";
 
 /**
  * La synthèse entière.
@@ -63,9 +63,22 @@ export function renderLaSyntheseDunDocument(brutes = [], { quoi = "Ce document",
     <section class="synthese">
       ${sur ? `<p class="synthese__mot">${escapeHtml(sur)}</p>` : ""}
       <p class="synthese__mot">${escapeHtml(phraseDeLaSynthese(synthese))}</p>
+      ${/*
+        **La transcription passe en tête**, et c'est le même ordre que celui de
+        l'onglet Changements.
+
+        Elle était l'item 3 de 4 : on lisait les liaisons employées, puis les
+        idées, puis — plus bas — le Mdall qui est *la* réponse à « qu'avez-vous
+        compris de mon document ». L'ordre dit ce qui compte, et il mettait en
+        premier le diagnostic du relevé (`docs/montrer-le-raisonnement.md`, D3).
+
+        Les liaisons et les idées restent, en dessous : elles expliquent
+        **pourquoi** le relevé est ce qu'il est, et c'est ce qu'on lit quand il
+        déçoit.
+      */""}
+      ${renderLeMdall(synthese.idees)}
       ${renderLesLiaisons(synthese.liaisons)}
       ${renderLesIdees(synthese.idees, quoi)}
-      ${renderLeMdall(synthese.idees)}
       ${renderLesRaisonnements(synthese.raisonnements)}
     </section>
   `;
@@ -128,6 +141,18 @@ function renderLesIdees(idees = [], quoi = "Ce document") {
  * **Les blocs exacts qu'une proposition porterait**, composés par l'écrivain
  * commun : une seconde écriture, approchante, ferait lire ici autre chose que
  * ce qu'on signerait là (règle 4).
+ *
+ * ## Le cadre et sa phrase, et non des blocs nus
+ *
+ * Les blocs étaient posés sous un titre de section — « Ce que la mémoire en
+ * écrirait » — et rien ne disait que **rien n'est encore écrit**. C'est la
+ * contrepartie de tout montrer : plus on montre, plus on risque de laisser
+ * croire que c'est déjà fait.
+ *
+ * `renderMdallAProposer` porte ce cadre, son compte et cette phrase — les mêmes
+ * que partout ailleurs. Un titre à nous aurait dit la même chose d'une autre
+ * façon, et c'est celle qu'on ne relit jamais qui aurait fini par ne plus la
+ * dire (règle 10).
  */
 function renderLeMdall(idees = []) {
   if (!idees.length) return "";
@@ -136,11 +161,11 @@ function renderLeMdall(idees = []) {
   if (!blocs.length) return "";
 
   return `
-    <div class="synthese__bloc">
-      <h4 class="synthese__titre">Ce que la mémoire en écrirait</h4>
-      <p class="synthese__aide">${escapeHtml(POURQUOI_PAS_DE_FONCTION)}</p>
-      ${renderBlocsMdall(blocs)}
-    </div>
+    ${renderMdallAProposer(blocs, {
+      titre: "Ce que nous avons compris de ce document",
+      quoi: SOUS_LE_TITRE.A_PROPOSER
+    })}
+    <p class="synthese__aide">${escapeHtml(POURQUOI_PAS_DE_FONCTION)}</p>
   `;
 }
 

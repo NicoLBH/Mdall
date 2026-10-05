@@ -996,7 +996,21 @@ test("la synthèse montre les liaisons, les idées et ce que la mémoire écrira
   assert.match(html, /Les liaisons employées/);
   assert.ok(html.includes(escapeHtml("« donc »")));
   assert.match(html, /Ce fil lie/);
-  assert.match(html, /Ce que la mémoire en écrirait/);
+
+  /**
+   * **La transcription passe en tête, et prend son cadre titré.**
+   *
+   * Elle s'appelait « Ce que la mémoire en écrirait » et vivait en item 3 de 4,
+   * sans rien qui dise que **rien n'est encore écrit**. C'est la contrepartie
+   * de tout montrer : plus on montre, plus on risque de laisser croire que
+   * c'est déjà fait (`docs/montrer-le-raisonnement.md`, D3).
+   */
+  assert.match(html, /Ce que nous avons compris de ce document/);
+  assert.match(html, /Rien n&#39;est demandé tant qu&#39;on n&#39;a pas cliqué/);
+  assert.ok(html.indexOf("Ce que nous avons compris de ce document")
+    < html.indexOf("Les liaisons employées"),
+    "les liaisons repassent devant la transcription");
+
   assert.match(html, /mdall-bloc/, "les blocs mdall ne sont pas ceux de la proposition");
   assert.match(html, /Ce qui s'enchaîne/);
   // Et il ne coûte rien, ce qui se dit.
