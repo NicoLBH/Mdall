@@ -956,3 +956,27 @@ test("le câblage de la batterie nomme les mêmes fonctions et les mêmes champs
       `le serveur ne nomme plus « ${quoi} » : la copie de la batterie a divergé`);
   }
 });
+
+/**
+ * **Un invariant tombé n'a de sens qu'avec son assiette.**
+ *
+ * `invariantsTombes` vivait seul dans le bilan. « 0 invariant tombé » se lit
+ * comme un succès, et c'est indiscernable de « aucun invariant posé » — qui est
+ * le cas d'une lecture muette, dont tout invariant tient par construction. Le
+ * défaut que cet outil existe pour attraper, dans l'outil lui-même.
+ */
+test("le bilan rend combien d'invariants ont été posés, et pas seulement combien sont tombés", () => {
+  const vide = leBilan([{ verdict: VERDICT.TIENT, invariants: { avant: [], apres: [] } }]);
+  assert.equal(vide.invariants, 0);
+  assert.equal(vide.invariantsTombes, 0,
+    "aucun invariant posé et aucun tombé se confondent : sans l'assiette, "
+    + "une lecture muette rend un bilan vert");
+
+  const pose = leBilan([
+    { verdict: VERDICT.TIENT,
+      invariants: { avant: [{ tient: true }, { tient: false }], apres: [{ tient: true }] } },
+    { verdict: VERDICT.TOMBE, invariants: { avant: [{ tient: true }], apres: [] } }
+  ]);
+  assert.equal(pose.invariants, 4);
+  assert.equal(pose.invariantsTombes, 1);
+});

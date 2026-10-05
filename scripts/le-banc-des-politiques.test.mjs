@@ -136,6 +136,10 @@ const LES_MIGRATIONS = [
   // Les venues : le trafic et le temps passé. Une table de présence, écrite par
   // le navigateur — donc celle où il faut essayer d'écrire la venue d'un autre.
   "202611240001_les_venues_de_mdall.sql",
+  // Les mesures de justesse : la table où les quatre outils déposent leur bilan.
+  // Sa contrainte `bilan_sans_contenu` est une promesse tenue par la structure,
+  // et une promesse de ce genre ne se relit pas — elle s'essaie.
+  "202611250001_les_mesures_de_justesse.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -144,12 +148,32 @@ const LES_MIGRATIONS = [
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+/**
+ * **Les comptes derrière les deux adresses du banc.**
+ *
+ * `sousLadresse` ne posait qu'un courriel dans le jeton, parce que la console
+ * se garde par le courriel. C'était un jeton que Supabase n'émet jamais : une
+ * session en porte toujours un `sub`, et `auth.uid()` le lit. Le banc entrait
+ * donc avec une identité à moitié vide, et toute politique écrite
+ * `owner_id = auth.uid()` était refusée pour une raison qui n'existe pas en
+ * production — une table se serait déclarée imprenable alors qu'elle s'ouvre.
+ *
+ * Ces deux comptes **ne possèdent aucun chantier**, pour que leur venue
+ * n'ouvre rien d'autre que ce que leur adresse ouvre déjà.
+ */
+const LES_COMPTES_DU_BANC = {
+  "patron@mdall.example": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  "quelquun@ailleurs.example": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+};
 const MEDIATHEQUE = "11111111-1111-4111-8111-111111111111";
 const GYMNASE = "33333333-3333-4333-8333-333333333333";
 
 /** Les quatre cas du propriétaire, et ce qu'on attend de chacun. */
 const LES_CHANTIERS = `
-insert into auth.users (id) values ('${A}'), ('${B}');
+insert into auth.users (id) values ('${A}'), ('${B}'),
+  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc'),
+  ('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
 
 insert into public.projects (id, name, owner_id) values
   -- sans propriétaire, un seul auteur : rendu à cet auteur
@@ -205,14 +229,22 @@ function leBanc() {
    * La même chose, sous une adresse : la console se garde par le courriel du
    * jeton, pas par l'identifiant.
    */
-  pg.sousLadresse = (courriel, texte) => pg.sql(
-    `set role authenticated;\n`
-    + (courriel
-      ? `set request.jwt.claims = '{"email":"${courriel}"}';\n`
-      : "reset request.jwt.claims;\n")
-    + texte,
-    { doitTenir: false }
-  );
+  pg.sousLadresse = (courriel, texte) => {
+    // Le `sub` va avec le courriel, comme dans un vrai jeton. Une adresse que
+    // le banc ne connaît pas entre sans compte : c'est le cas du jeton forgé.
+    const qui = LES_COMPTES_DU_BANC[courriel];
+    return pg.sql(
+      `set role authenticated;\n`
+      + (courriel
+        ? `set request.jwt.claims = '${JSON.stringify({ email: courriel, sub: qui })}';\n`
+        : "reset request.jwt.claims;\n")
+      + (qui
+        ? `set request.jwt.claim.sub = '${qui}';\n`
+        : "reset request.jwt.claim.sub;\n")
+      + texte,
+      { doitTenir: false }
+    );
+  };
 
   return pg;
 }
@@ -4188,4 +4220,297 @@ test("la table des venues n'a aucune colonne où du contenu tiendrait",
     assert.deepEqual(colonnes,
       ["commencee_le", "id", "owner_id", "secondes_actives", "vue_le"],
       `la table des venues a changé de forme : ${colonnes.join(", ")}`);
+  });
+
+/* ── Les mesures de justesse ──────────────────────────────────────────────── */
+
+/**
+ * **La console ne lit pas un contenu de chantier, et cette table ne peut pas en
+ * porter.**
+ *
+ * `bilan_sans_contenu` est la promesse tenue par la structure. Une promesse de
+ * ce genre ne se relit pas — elle s'essaie : on tente d'y poser le bilan le plus
+ * utile que ces outils produisent, « RICT-03 a manqué l'avis A-23 », et la base
+ * doit le refuser.
+ */
+test("un bilan qui nomme un document est refusé par la base",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    for (const [quoi, bilan] of [
+      ["un document nommé", `'{"document": "RICT-03.pdf"}'`],
+      ["une citation", `'{"citations": ["est conforme a l instruction"]}'`],
+      ["des relevés manqués", `'{"manques": ["a 23"]}'`],
+      ["des pièges tombés", `'{"piegesTombes": ["la legende prise pour des avis"]}'`],
+      ["des écarts nominatifs", `'{"ecarts": ["a 07 : marque F vers D"]}'`],
+      ["un chantier", `'{"project_id": "${MEDIATHEQUE}"}'`]
+    ]) {
+      const pose = banc.sousLadresse("patron@mdall.example",
+        `insert into public.mesures_de_justesse (quoi, bilan) values ('derive', ${bilan});`);
+      assert.equal(pose.ok, false, `« ${quoi} » entre dans la console`);
+      assert.match(pose.motif, /bilan_sans_contenu/,
+        `« ${quoi} » est refusé pour une autre raison que la contrainte`);
+    }
+  });
+
+/** Et des comptes passent : la contrainte refuse le contenu, pas la mesure. */
+test("un bilan qui ne porte que des nombres se dépose",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    banc.sql("delete from public.mesures_de_justesse;");
+
+    const pose = banc.sousLadresse("patron@mdall.example",
+      "insert into public.mesures_de_justesse (quoi, procede, combien, bilan) values "
+      + `('jeu_de_reference', 'modele A · v2', 9, '{"rappel": 0.94, "precision": 0.97}');`);
+    assert.equal(pose.ok, true, pose.motif);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select quoi, procede, combien from public.mesures_de_justesse;");
+    assert.match(lu.sortie, /jeu_de_reference\s*\|\s*modele A · v2\s*\|\s*9/);
+  });
+
+/**
+ * **Un outil qu'on n'a pas écrit ne dépose pas.** Une valeur inconnue dans
+ * `quoi` serait une ligne que l'écran ne saurait pas nommer — et qu'il
+ * afficherait quand même, sous un libellé vide (règle 5).
+ */
+test("un outil de mesure inconnu ne dépose pas", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  const pose = banc.sousLadresse("patron@mdall.example",
+    "insert into public.mesures_de_justesse (quoi) values ('un_outil_quon_na_pas_ecrit');");
+  assert.equal(pose.ok, false, "n'importe quel outil dépose dans la console");
+});
+
+/**
+ * **La porte, des deux côtés.** Ouvrir la lecture à tous ferait d'un taux
+ * d'erreur interne une information publique du produit ; ouvrir l'écriture
+ * laisserait n'importe qui choisir les chiffres de la console.
+ */
+test("les mesures se refusent à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_de_justesse;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    banc.sousLadresse("patron@mdall.example",
+      "insert into public.mesures_de_justesse (quoi, combien) values ('derive', 3);");
+
+    const lu = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.mesures_de_justesse;");
+    assert.equal(lu.sortie.trim(), "0", "un compte ordinaire lit les mesures de la console");
+
+    const pose = banc.sousLadresse("quelquun@ailleurs.example",
+      "insert into public.mesures_de_justesse (quoi, combien) values ('derive', 99);");
+    assert.equal(pose.ok, false, "un compte ordinaire dépose une mesure");
+  });
+
+/**
+ * **Une mesure qui a eu lieu ne devient pas fausse** (règle 6). Ni mise à jour,
+ * ni effacement : aucune politique ne les ouvre, et une table sous RLS sans
+ * politique pour un verbe le refuse à tous. Une suite dont on retire les
+ * mauvais points n'est plus une suite.
+ */
+test("une mesure déposée ne se corrige ni ne s'efface",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_de_justesse;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    banc.sousLadresse("patron@mdall.example",
+      "insert into public.mesures_de_justesse (quoi, combien) values ('derive', 3);");
+
+    banc.sousLadresse("patron@mdall.example",
+      "update public.mesures_de_justesse set combien = 0;");
+    banc.sousLadresse("patron@mdall.example", "delete from public.mesures_de_justesse;");
+
+    const reste = banc.sousLadresse("patron@mdall.example",
+      "select combien from public.mesures_de_justesse;");
+    assert.equal(reste.sortie.trim(), "3",
+      "un administrateur réécrit ou efface une mesure : il choisirait ses résultats");
+  });
+
+/** La purge existe, elle est réservée, et **rien ne l'appelle** (règle 12). */
+test("la purge des vieilles mesures est réservée à l'administrateur",
+  { skip: sansPostgres }, () => {
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select public.effacer_les_vieilles_mesures();");
+    assert.equal(etranger.ok, false, "n'importe qui purge les mesures");
+
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    const purge = banc.sousLadresse("patron@mdall.example",
+      "select public.effacer_les_vieilles_mesures();");
+    assert.equal(purge.ok, true, purge.motif);
+  });
+
+/* ── Déposer une mesure : ce que la fonction laisse passer ─────────────────── */
+
+/**
+ * **La contrainte ne regarde que les noms de clés** — c'est sa limite, et c'est
+ * pour cela que `deposer_une_mesure` existe.
+ *
+ * `{"tombees": "RICT-03 a manqué l'avis A-23"}` passe `bilan_sans_contenu` sans
+ * la moindre difficulté : `tombees` n'est pas un nom interdit. La phrase est
+ * pourtant exactement ce que la console ne doit pas porter. La fonction ne garde
+ * donc d'une clé permise que ce qui est **un nombre**, et c'est la deuxième
+ * serrure sur la même porte — la première ferme les noms, la seconde les types.
+ */
+test("une phrase rangée sous une clé permise n'entre pas dans la console",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_de_justesse;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    // La preuve que la contrainte, seule, la laisserait entrer.
+    const brut = banc.sousLadresse("patron@mdall.example",
+      `insert into public.mesures_de_justesse (quoi, bilan) values
+       ('perturbations', '{"tombees": "RICT-03 a manqué l avis A-23"}');`);
+    assert.equal(brut.ok, true,
+      "la contrainte refuse déjà une phrase sous une clé permise : la fonction "
+      + "ne serait alors la serrure de rien");
+
+    banc.sql("delete from public.mesures_de_justesse;");
+
+    const pose = banc.sousLadresse("patron@mdall.example",
+      `select public.deposer_une_mesure('perturbations', 'modele A · v2', 6,
+         '{"tombees": "RICT-03 a manqué l avis A-23", "epreuves": 6}');`);
+    assert.equal(pose.ok, true, pose.motif);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select bilan::text from public.mesures_de_justesse;");
+    assert.match(lu.sortie, /"epreuves":\s*6/, "l'assiette n'a pas été gardée");
+    assert.doesNotMatch(lu.sortie, /RICT-03|A-23/,
+      "une phrase est entrée dans la console par une clé permise");
+  });
+
+/**
+ * **Une clé qu'aucun outil n'a déclarée ne traverse pas**, même si elle porte un
+ * nombre. Un outil qui ajoute un chiffre en ajoute un à l'écran, et l'écran
+ * l'afficherait sans savoir ce qu'il mesure (règle 5) : passer par une migration
+ * est le prix d'une relecture.
+ */
+test("une clé non déclarée est jetée, même si c'est un nombre",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_de_justesse;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    banc.sousLadresse("patron@mdall.example",
+      `select public.deposer_une_mesure('derive', '', 4,
+         '{"derives": 1, "unChiffreQuePersonneNaDeclare": 42}');`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select bilan::text from public.mesures_de_justesse;");
+    assert.match(lu.sortie, /"derives":\s*1/);
+    assert.doesNotMatch(lu.sortie, /unChiffreQuePersonneNaDeclare|42/,
+      "un outil ajoute un chiffre à la console sans passer par une migration");
+  });
+
+/**
+ * **`etapes` est le seul objet admis**, et c'est ce qui interdit au jeu de
+ * référence de rendre un score unique : un nombre par étape, et l'écran ne peut
+ * pas les fondre puisqu'il ne reçoit jamais leur somme.
+ *
+ * Ses valeurs sont filtrées comme les autres : une étape dont le chiffre est une
+ * phrase disparaît, l'étape avec.
+ */
+test("les étapes passent une par une, et seulement en nombres",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_de_justesse;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    banc.sousLadresse("patron@mdall.example",
+      `select public.deposer_une_mesure('jeu_de_reference', 'modele A · v2', 2,
+         '{"etapes": {"forme": 1.0, "releves": 0.86, "quoiRate": "l avis A-23"}}');`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select bilan::text from public.mesures_de_justesse;");
+    assert.match(lu.sortie, /"forme":\s*1\.0/);
+    assert.match(lu.sortie, /"releves":\s*0\.86/);
+    assert.doesNotMatch(lu.sortie, /A-23|quoiRate/,
+      "une phrase est entrée par une étape du jeu de référence");
+  });
+
+/** Le dépôt est un geste d'administration : il se refuse, et il se journalise. */
+test("déposer une mesure se refuse aux autres, et laisse une ligne",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_de_justesse;");
+    banc.sql("delete from public.acces_administrateurs;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select public.deposer_une_mesure('derive', '', 1, '{}');");
+    assert.equal(etranger.ok, false, "n'importe qui dépose une mesure dans la console");
+
+    banc.sousLadresse("patron@mdall.example",
+      "select public.deposer_une_mesure('derive', '', 1, '{\"derives\": 0}');");
+
+    const journal = banc.sql("select page from public.acces_administrateurs;");
+    assert.match(journal.sortie, /justesse\/depot/,
+      "un dépôt de mesure ne laisse aucune trace");
+    assert.doesNotMatch(journal.sortie, /quelquun@ailleurs/,
+      "un refus s'est journalisé : le journal compterait des accès qui n'ont pas eu lieu");
+  });
+
+/* ── Relire la justesse ───────────────────────────────────────────────────── */
+
+/**
+ * **Le rang est posé par outil ET par procédé.**
+ *
+ * Sans le procédé dans la partition, le dernier bilan d'un procédé qu'on
+ * n'emploie plus se serait trouvé au rang 2, donc rangé dans « l'histoire » :
+ * l'écran aurait montré la justesse du procédé en service et celle de l'ancien
+ * dans la même colonne, en présentant la plus récente des deux comme l'état du
+ * système. C'est précisément la confusion que la dérive existe pour trancher.
+ */
+test("le dernier bilan de chaque procédé est au rang 1", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.mesures_de_justesse;");
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  for (const [procede, quand, combien] of [
+    ["modele A · v1", "2026-01-01", 4],
+    ["modele A · v1", "2026-02-01", 5],
+    ["modele A · v2", "2026-03-01", 6]
+  ]) {
+    banc.sql(
+      "insert into public.mesures_de_justesse (owner_id, quoi, procede, quand, combien) values "
+      + `('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'perturbations', '${procede}', `
+      + `'${quand}'::timestamptz, ${combien});`);
+  }
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select procede, combien, rang from public.la_justesse_des_analyses(60) order by rang, procede;");
+
+  // Deux au rang 1 : un par procédé. Le v1 de janvier est au rang 2.
+  const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+  const premiers = lignes.filter((une) => une.endsWith("|1"));
+  assert.equal(premiers.length, 2, `deux procédés, deux rangs 1 — lu :\n${lu.sortie}`);
+  assert.ok(premiers.some((une) => une.startsWith("modele A · v1|5")),
+    "le dernier bilan du procédé retiré n'est pas au rang 1");
+  assert.ok(premiers.some((une) => une.startsWith("modele A · v2|6")),
+    "le dernier bilan du procédé en service n'est pas au rang 1");
+});
+
+/** La lecture se garde par la porte, et s'inscrit au journal comme les autres. */
+test("relire la justesse se refuse aux autres, et laisse une ligne",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.acces_administrateurs;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.la_justesse_des_analyses(60);");
+    assert.equal(etranger.ok, false, "un compte ordinaire lit la justesse de Mdall");
+
+    banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.la_justesse_des_analyses(60);");
+
+    const journal = banc.sql("select page from public.acces_administrateurs;");
+    assert.match(journal.sortie, /exploitation\/justesse/,
+      "lire la justesse ne laisse aucune trace");
   });

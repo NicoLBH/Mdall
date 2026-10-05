@@ -146,9 +146,19 @@ export function leBilan(epreuves = []) {
   const tombees = parVerdict(VERDICT.TOMBE).length;
   const sansObjet = parVerdict(VERDICT.SANS_OBJET);
 
-  const invariantsTombes = toutes.flatMap((une) => [
+  /**
+   * **Les invariants posés, et non seulement ceux qui sont tombés.**
+   *
+   * `invariantsTombes` vivait seul, sans assiette : « 0 invariant tombé » se
+   * lit comme un succès, et c'est indiscernable de « aucun invariant posé » —
+   * qui est le cas d'une lecture muette, dont tout invariant tient par
+   * construction. Le même défaut que cet outil existe pour attraper, dans
+   * l'outil lui-même (règle 5).
+   */
+  const lesInvariants = toutes.flatMap((une) => [
     ...(une?.invariants?.avant ?? []), ...(une?.invariants?.apres ?? [])
-  ]).filter((un) => un?.tient === false).length;
+  ]);
+  const invariantsTombes = lesInvariants.filter((un) => un?.tient === false).length;
 
   return {
     posees: toutes.length,
@@ -160,6 +170,7 @@ export function leBilan(epreuves = []) {
       const quoi = texte(une?.pourquoiPas) || "relation sans objet";
       return { ...compte, [quoi]: (compte[quoi] ?? 0) + 1 };
     }, {}),
+    invariants: lesInvariants.length,
     invariantsTombes,
     /**
      * **Sur les épreuves qui ont eu lieu, et le dénominateur est dit.** « 6 sur

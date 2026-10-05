@@ -131,3 +131,57 @@ test("les modules de la console ne remontent jamais vers apps/web", async () => 
     }
   }
 });
+
+/**
+ * **Tout ce que la console importe de `partage/` est bien emporté.**
+ *
+ * ## Le défaut, qui n'a fait tomber absolument rien
+ *
+ * `lexploitation.js` s'est mis à importer `partage/js/services/la-justesse-de-mdall.js`
+ * — un module neuf de `apps/web` — et `RACINES` ne le nommait pas. Le script a
+ * emporté ses 49 modules comme d'habitude, `prepare:console` a rendu zéro,
+ * `npm test` est passé en entier, et la page aurait cherché au premier clic un
+ * fichier qui n'existe pas. Un écran blanc, en production, sans un seul signal.
+ *
+ * C'est le cas exact où lire des sources comme du texte se justifie : **le
+ * défaut est invisible et précis.** Le script ne part pas des fichiers de la
+ * console — il part d'une liste —, donc rien ne relie ce que la console demande
+ * à ce qu'elle reçoit. Ce test est ce lien.
+ *
+ * Le test voisin vérifie que la console ne remonte pas vers `apps/web` ; celui-ci
+ * vérifie que ce qu'elle demande à `partage/` est là. Les deux moitiés de la même
+ * frontière.
+ */
+test("rien de ce que la console importe de partage/ ne manque", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const consoleDir = path.join(rootDir, "apps", "console", "js");
+
+  // **Tous les fichiers, et non une liste de noms.** Une liste aurait eu le
+  // même défaut que `RACINES` : le module suivant s'y serait ajouté, ou non.
+  const fichiers = (await readdir(consoleDir)).filter((un) => un.endsWith(".js"));
+  assert.ok(fichiers.length >= 4, `trop peu de fichiers lus dans apps/console/js : ${fichiers}`);
+
+  const emportes = new Set(await lesModulesAEmporter(lireDuSite));
+  const telsQuels = TELS_QUELS.map((un) => un.replace(/\/+$/, ""));
+
+  const demandes = [];
+  for (const nom of fichiers) {
+    const source = await readFile(path.join(consoleDir, nom), "utf8");
+    for (const importe of cheminsImportes(source)) {
+      if (!importe.startsWith("../partage/")) continue;
+      // `../partage/js/services/x.js` demande `js/services/x.js` de apps/web.
+      demandes.push([nom, importe.replace("../partage/", "")]);
+    }
+  }
+
+  assert.ok(demandes.length >= 10,
+    `trop peu d'imports de partage/ relevés : ${demandes.length}`);
+
+  for (const [nom, relatif] of demandes) {
+    const emporte = emportes.has(relatif)
+      || telsQuels.some((un) => relatif === un || relatif.startsWith(`${un}/`));
+    assert.ok(emporte,
+      `${nom} importe « ${relatif} », que le script n'emporte pas : la page `
+      + "chargerait un module absent, et rien d'autre ne le dirait");
+  }
+});
