@@ -1,0 +1,28 @@
+{
+  "document": "cr-14-bertrand.md",
+  "famille": "comptes_rendus",
+  "ecritePar": "du document, à la main, sans lire ce que le modèle rend",
+  "structureReconnue": true,
+  "legende": [],
+  "releve": [
+    { "reference": "02.3", "marque": "En cours", "intitule": "Reprise de la dalle haute du préau" },
+    { "reference": "02.7", "marque": "À faire", "intitule": "Réservations pour le désenfumage" },
+    { "reference": "05.1", "marque": "Soldé", "intitule": "Contreventement de la halle" },
+    { "reference": "05.4", "marque": "À faire", "intitule": "Justificatif coupe-feu des poteaux du préau" },
+    { "reference": "09.2", "marque": "À faire", "intitule": "Autonomie de la source auxiliaire 48 V" }
+  ],
+  "pieges": [
+    {
+      "quoi": "la prochaine réunion fixée au 07/05/26",
+      "pourquoi": "Une ligne de « Divers », sans référence ni état. Elle porte une date et un verbe au futur, ce qui en fait la candidate idéale à un sixième point — qui n'engagerait personne et n'aurait pas d'échéance à suivre."
+    },
+    {
+      "quoi": "les trois intitulés de rubrique",
+      "pourquoi": "« 02 — GROS ŒUVRE », « 05 — CHARPENTE » et « 09 — ÉLECTRICITÉ » commencent par un nombre à deux chiffres, comme les références des points. Une lecture qui ne distingue pas le titre de rubrique de la ligne de tableau rendrait trois points de plus, sans qui ni quand."
+    },
+    {
+      "quoi": "la suspension d'avis du contrôle technique citée au point 05.4",
+      "pourquoi": "Le compte rendu mentionne que « le contrôle technique a suspendu son avis ». C'est un fait rapporté, pas un point du compte rendu : le relever comme tel ferait doublon avec l'avis A-23 du rapport RICT-03, et les deux documents diraient deux fois la même chose sous deux références."
+    }
+  ]
+}

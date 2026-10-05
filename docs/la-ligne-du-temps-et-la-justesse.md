@@ -279,8 +279,8 @@ sur un échantillon), et chaque survivant est un défaut réel.
 | 1. Les invariants, agrégés | **faits** — deux posés, et ils tournent sur tout ce qui est en base |
 | 2. La batterie de perturbations | **faite**, six perturbations · `docs/la-batterie-des-perturbations.md` |
 | 3. La dérive contre les analyses gelées | **faite** · `docs/la-derive-des-analyses.md` |
-| 4. Le jeu de référence | pas commencé |
-| 5. La ligne du temps | pas commencé |
+| 4. Le jeu de référence | **commencé** — la mécanique est là, deux documents annotés sur la cinquantaine qu'il faut · `docs/le-jeu-de-reference.md` |
+| 5. La ligne du temps | **faite** · `docs/la-ligne-du-temps.md` |
 
 Le point 2 a été écrit en premier, avant le point 1, et c'était le bon ordre : les
 invariants n'avaient nulle part où s'afficher tant qu'aucun outil ne lisait un
@@ -325,3 +325,38 @@ Et les invariants du point 1 sont venus avec, sans rien coûter : le Markdown es
 gelé avec l'analyse, ils se posent donc sur chaque lecture conservée. Le point 1
 était à écrire en premier sur le papier ; il s'est trouvé livré en troisième,
 parce qu'il n'avait nulle part où s'afficher avant qu'un outil lise un corpus.
+
+### Le jeu de référence : la mécanique, et deux documents
+
+La mesure est là — précision, rappel, marques, pièges, **par étape et jamais en
+un score**. Ce qui manque est le corpus : deux documents annotés sur la
+cinquantaine que ce document annonçait, et ce sont les cas difficiles qui
+manquent.
+
+Une chose n'avait pas été prévue, et elle compte autant que le reste : **les
+pièges**, c'est-à-dire ce que la lecture ne doit *pas* relever. Tout relever donne
+un rappel parfait ; sans pièges, le jeu ne mesure que la moitié de la question.
+
+Et la faute qui le viderait de son sens est fermée par un refus : une annotation
+doit **déclarer d'où elle vient**, et le jeu refuse celle qui ne le dit pas. Une
+annotation écrite en regardant la sortie du modèle certifierait la lecture au
+lieu de la juger, et rendrait 100 % pour toujours.
+
+### La ligne du temps : l'unité, et ce que le document n'avait pas vu
+
+Le fait daté, les deux dates, les trois règles, les deux lignes : tout cela est
+livré comme annoncé, et `cequElleRevise` est réemployée plutôt que réécrite.
+
+Deux choses ont bougé en chemin :
+
+* **la projection n'est pas dans le registre des familles**, contrairement à ce
+  qui est écrit plus haut. Le registre est chargé par tous les écrans, et
+  l'extraction des faits ne sert qu'à la ligne du temps. La raison est dite dans
+  le module, et ce qui rend la seconde place tenable est qu'elle **refuse** ;
+* **une lecture se place parmi celles de sa propre famille.** Le document ne le
+  disait pas, et sans cette règle un rapport de contrôle reculerait parce qu'un
+  compte rendu plus récent existe — alors qu'ils ne révisent pas les mêmes
+  sujets.
+
+Reste entier le trou que le diagnostic nommait : **les fils de mails ne
+produisent aucun fait daté**. Rien ne place un fil dans le temps du chantier.

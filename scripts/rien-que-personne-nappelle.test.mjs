@@ -98,7 +98,13 @@ const LES_MODULES_SOUS_GARDE = [
   "scripts/la-derive-des-analyses/les-analyses-gelees.js",
   "scripts/la-derive-des-analyses/la-derive.js",
   "scripts/la-derive-des-analyses/les-gelees-du-serveur.js",
-  "scripts/la-derive-des-analyses/une-base-de-carton.js"
+  "scripts/la-derive-des-analyses/une-base-de-carton.js",
+  // Le jeu de référence, et la ligne du temps.
+  "scripts/le-jeu-de-reference/lannotation.js",
+  "scripts/le-jeu-de-reference/la-confrontation.js",
+  "scripts/le-jeu-de-reference/passer-le-jeu.js",
+  "apps/web/js/services/les-faits-dates.js",
+  "apps/web/js/services/la-ligne-du-temps.js"
 ];
 
 /** Où l'on cherche les appels. Les tests n'en sont pas : ils appellent tout. */

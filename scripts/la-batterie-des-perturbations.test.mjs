@@ -169,7 +169,23 @@ test("deux relevés de même clé : le premier est gardé, les suivants comptés
   assert.equal(empreinte.parCle.get("a 07").doubles, 1);
 });
 
-test("un compte rendu se projette sur la même forme qu'un rapport", () => {
+/**
+ * **Un compte rendu ne déclare aucune légende, et c'est le vrai énoncé.**
+ *
+ * Les libellés de rubrique y tenaient lieu de légende. C'était faux, et il a
+ * fallu deux outils de mesure qui se contredisent pour le voir : le jeu de
+ * référence trouvait une légende manquée là où le lecteur lisait tout, puis
+ * l'auto-épreuve de cette batterie s'est mise à compter six invariants tombés
+ * sur un corpus qu'elle lisait parfaitement la veille.
+ *
+ * Une **légende** est la table qui déclare le sens des marques, et c'est sur
+ * elle que s'appuie l'invariant « toute marque employée est déclarée ». Les
+ * rubriques d'un compte rendu ne déclarent rien de ses états : ce sont deux
+ * classements sans rapport. Un compte rendu ne déclare pas le sens de ses états
+ * — c'est un fait du document, pas un manque de la lecture, et l'invariant sait
+ * déjà dire qu'il ne se pose pas.
+ */
+test("un compte rendu se projette sur la même forme, et sans légende", () => {
   const empreinte = lempreinteDuneLecture({
     points: [{ reference: "02.3", titre: "Dalle du préau", etat: "En cours",
       description: "Coulée", citation: "Coulée le 22/04/26" }],
@@ -179,7 +195,15 @@ test("un compte rendu se projette sur la même forme qu'un rapport", () => {
   const un = empreinte.parCle.get("02 3");
   assert.equal(un.marque, "En cours", "l'état d'un point n'est pas sa marque");
   assert.equal(un.intitule, "Dalle du préau");
-  assert.deepEqual(empreinte.legende, ["02 — GROS ŒUVRE"]);
+
+  assert.deepEqual(empreinte.legende, [],
+    "les rubriques passent pour une légende : l'invariant des marques tomberait "
+    + "sur chaque point d'un compte rendu parfaitement lu");
+
+  // Et l'invariant le dit comme tel : il ne se pose pas, il n'échoue pas.
+  const dit = lesMarquesSontDeclarees(empreinte);
+  assert.equal(dit.tient, true);
+  assert.match(dit.dit, /ne se pose pas/);
 });
 
 /* ── Les perturbations ───────────────────────────────────────────────────── */
