@@ -270,4 +270,31 @@ sur un échantillon), et chaque survivant est un défaut réel.
    quelque chose. L'inverse — ordonner d'abord des faits dont on ne connaît pas la
    qualité — donnerait une belle chronologie de données fausses.
 
-**Rien de tout cela n'est commencé**, et c'est dit ici plutôt que laissé croire.
+---
+
+## 5. Où l'on en est
+
+| | État |
+| --- | --- |
+| 1. Les invariants, agrégés | **commencé** — deux posés, dans la batterie |
+| 2. La batterie de perturbations | **faite**, six perturbations · `docs/la-batterie-des-perturbations.md` |
+| 3. La dérive contre les analyses gelées | pas commencé |
+| 4. Le jeu de référence | pas commencé |
+| 5. La ligne du temps | pas commencé |
+
+Le point 2 a été écrit en premier, avant le point 1, et c'était le bon ordre : les
+invariants n'avaient nulle part où s'afficher tant qu'aucun outil ne lisait un
+corpus. Ils sont donc posés **dans** la batterie, qui les pose sur les deux
+lectures qu'elle paie déjà — deux pour l'instant, la citation retrouvée et la
+marque déclarée.
+
+**Elle attrape ce qu'elle promettait d'attraper.** Ses propres épreuves lui
+donnent deux lecteurs : l'un lit la colonne du verdict, l'autre rend toujours la
+même marque sans la regarder. Sur cinq perturbations, les deux sont
+indiscernables ; sur « une phrase niée », le second tombe. C'est ce qui en fait un
+instrument de mesure et non une décoration — on l'a vu tomber, exprès, sur un
+défaut fabriqué.
+
+Ce qui reste est dit au bout de son document : le lecteur du serveur n'a jamais
+tourné pour de vrai, seuls les rapports de contrôle y passent, et rien n'est
+encore suivi dans le temps.
