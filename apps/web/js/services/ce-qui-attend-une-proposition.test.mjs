@@ -15,9 +15,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CE_QUE_LE_REFUS_DIT, POURQUOI_PAS_DE_LOT, attendUneProposition,
+  CE_QUE_LE_REFUS_DIT, POURQUOI_LE_DEPART_EST_REFUSE, POURQUOI_PAS_DE_LOT, attendUneProposition,
   ceQuUneSeulePropositionPorterait, ceQueLeBoutonDuLotDit, leLotQuiAttend, leTitreDuLot,
-  lesFamillesDuLot, lesLecturesSansDocument, lesLecturesSansTranscription, phraseDuLot
+  lesFamillesDuLot, lesLecturesSansDocument, lesLecturesSansTranscription,
+  phraseDuDepartRefuse, phraseDuLot
 } from "./ce-qui-attend-une-proposition.js";
 import { FAMILLE, TOUTES } from "./les-familles-de-document.js";
 import { OU_EN_EST } from "./les-documents-analyses.js";
@@ -331,4 +332,32 @@ test("le lot mêle les deux familles qui se transcrivent", () => {
     un("fil", { famille: FAMILLE.MAIL })
   ]);
   assert.deepEqual(lot.map((une) => une.id), ["cr", "bc"]);
+});
+
+/* ── Pourquoi le clic n'a rien lancé ─────────────────────────────────────── */
+
+test("chaque motif de refus du départ a sa phrase, et elles ne se confondent pas", () => {
+  const motifs = Object.values(POURQUOI_LE_DEPART_EST_REFUSE);
+
+  // Deux motifs ne sont utiles que s'ils se lisent différemment : un texte
+  // commun renverrait au même geste, et il n'y en a pas deux ici — l'un dit
+  // « le compte a bougé », l'autre « reconnectez-vous ».
+  const dites = motifs.map((un) => phraseDuDepartRefuse(un));
+  for (const [rang, dit] of dites.entries()) {
+    assert.ok(dit.length > 20, `le motif « ${motifs[rang]} » n'a pas de phrase`);
+  }
+  assert.equal(new Set(dites).size, motifs.length, "deux motifs disent la même chose");
+
+  // Et chacune dit que rien n'est parti : c'est la seule chose que le lecteur
+  // doit en retenir avant le reste.
+  for (const dit of dites) assert.match(dit, /Rien n'est parti/);
+});
+
+test("un motif inconnu ne fabrique pas de phrase", () => {
+  // La chaîne vide est ce que l'écran teste pour savoir s'il a quelque chose à
+  // afficher : une phrase d'attente ferait apparaître un refus sous un bouton
+  // jamais cliqué.
+  assert.equal(phraseDuDepartRefuse(""), "");
+  assert.equal(phraseDuDepartRefuse("un_motif_qui_nexiste_pas"), "");
+  assert.equal(phraseDuDepartRefuse(), "");
 });

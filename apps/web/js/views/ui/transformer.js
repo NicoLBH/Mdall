@@ -82,6 +82,17 @@ export function brancheDeLAction(action = "") {
  * @param {object[]|null} [options.ouvertes] les propositions qu'on peut enrichir,
  *   ou `null` quand la base n'a pas répondu — les deux ne s'affichent pas pareil.
  */
+/**
+ * Le mot du geste, pour que deux écrans ne l'écrivent pas différemment.
+ *
+ * *Analyse de documents* porte le même geste à l'accueil — « transformer tout
+ * ce qui a été lu depuis la dernière proposition » — sous un bouton à lui,
+ * parce que ce qu'il transforme n'est pas un document ouvert mais un lot. Le
+ * mot, lui, est le même : recopié là-bas, il aurait dérivé au premier
+ * changement (règle 10).
+ */
+export const LE_MOT_DU_GESTE = "Transformer";
+
 export function renderTransformer({
   id = "atelierTransformer",
   disabled = false,
@@ -91,7 +102,7 @@ export function renderTransformer({
 } = {}) {
   return renderGhActionButton({
     id,
-    label: "Transformer",
+    label: LE_MOT_DU_GESTE,
     tone,
     size,
     disabled,

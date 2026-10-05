@@ -22,7 +22,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  leChantierAChange, lesEntreesDuChoix, matiereDuCompteRendu, renderLaLecture,
+  leChantierAChange, leDepartDuLot, lesEntreesDuChoix, matiereDuCompteRendu, renderLaLecture,
   reservesDeLaRestitution
 } from "./lecture-des-cr.js";
 import { FAMILLE, TOUTES } from "../../../services/les-familles-de-document.js";
@@ -32,6 +32,10 @@ import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
 import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
 import { blocsAProposer } from "../../ui/mdall-de-la-proposition.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
+import { LE_MOT_DU_GESTE } from "../../ui/transformer.js";
+import {
+  CE_QUE_LE_REFUS_DIT, POURQUOI_LE_DEPART_EST_REFUSE, POURQUOI_PAS_DE_LOT, phraseDuDepartRefuse
+} from "../../../services/ce-qui-attend-une-proposition.js";
 import {
   LECTURE, assemblerLeMarkdown, fideliteDeLaReconstitution
 } from "../../../services/reconstitution-markdown.js";
@@ -1137,10 +1141,19 @@ test("aucune échéance, aucun bloc d'objectifs", () => {
  * une quatrième issue.
  */
 test("la seule sortie de l'écran est en haut, et s'éteint tant qu'il n'y a rien", () => {
+  /**
+   * **À l'accueil, la sortie est celle du lot.** Elle était celle d'un document
+   * ouvert, et il n'y en a aucun : le bouton était donc éteint par construction,
+   * et cliqué il ne pouvait rien faire ni rien dire.
+   *
+   * Ici rien n'a été lu : il est éteint pour une raison qui se lit — et c'est
+   * cette raison, et non l'extinction, qui fait la différence avec un bouton
+   * mort.
+   */
   const vide = renderLaLecture(unEtat());
   assert.match(vide, /lecture-cr__entete-actions/);
-  assert.match(vide, /lectureCrTransformer/);
   assert.match(vide, /disabled/);
+  assert.match(vide, new RegExp(escapeHtml(CE_QUE_LE_REFUS_DIT[POURQUOI_PAS_DE_LOT.RIEN_DE_LU])));
 
   const lue = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
@@ -2530,7 +2543,9 @@ test("un bouton vert ouvre la zone, et il est à gauche de Transformer", () => {
   assert.match(html, /gh-btn--primary/, "le bouton qui ajoute n'est pas au vert plein");
   assert.doesNotMatch(html, /gh-btn--success/,
     "le bouton garde le vert pâle des messages d'information");
-  assert.ok(html.indexOf("data-lecture-cr-ouvrir-depot") < html.indexOf("lectureCrTransformer"),
+  // L'ancre est le mot du geste, et non l'identifiant du menu d'un document :
+  // à l'accueil, le geste de la ligne de titre est celui du lot.
+  assert.ok(html.indexOf("data-lecture-cr-ouvrir-depot") < html.indexOf(LE_MOT_DU_GESTE),
     "« + Documents » se dessine après Transformer");
 });
 
@@ -3312,4 +3327,124 @@ test("la barre dit qu'un fil est un seul appel, et qu'il faut rester", () => {
   }));
   assert.match(rapports, commeAffichee("Vous pouvez fermer cet écran"));
   assert.doesNotMatch(rapports, commeAffichee("un seul fil"));
+});
+
+/* ── L'accueil : le geste de l'en-tête, et l'alerte ──────────────────────── */
+
+/**
+ * L'accueil avec deux lectures qui attendent une proposition.
+ *
+ * Les lignes sont **celles de la base** — `document_id`, `proposition_id`,
+ * `created_at` en snake_case — parce que c'est sous cette forme que l'écran les
+ * reçoit. Recopiées en camelCase, elles auraient testé une forme que personne
+ * ne produit.
+ */
+function unAccueilQuiAttend(surcharge = {}) {
+  return unEtat({
+    phase: "vide",
+    famille: TOUTES,
+    dejaLus: [{
+      id: "c-7", document: "CR_17.pdf", document_id: "d-17", proposition_id: null,
+      numero_de_reunion: "17", tenue_le: "2026-04-23",
+      created_at: "2026-09-30T10:00:00Z", mesures: { points: 11 }
+    }],
+    dejaLusControles: [{
+      id: "r-7", document: "RICT-07.pdf", document_id: "d-7", proposition_id: null,
+      numero_de_rapport: "RICT-07", etabli_le: "2026-04-18",
+      created_at: "2026-09-28T10:00:00Z", mesures: { avis: 12 }
+    }],
+    dejaLusMails: [], file: [],
+    ...surcharge
+  });
+}
+
+test("à l'accueil, l'en-tête porte le geste du lot et non celui d'un document", () => {
+  /**
+   * **Le défaut rapporté** : « quand je clic sur transformer depuis analyse de
+   * documents, il ne se passe rien. »
+   *
+   * L'en-tête portait `renderTransformer`, qui transforme **la lecture qu'on
+   * regarde** — et à l'accueil on n'en regarde aucune, donc il était éteint,
+   * gris, sans infobulle. Le geste qui a un sens ici est le lot.
+   */
+  const html = renderLaLecture(unAccueilQuiAttend());
+
+  assert.match(html, /data-attente-action="porterLeLot"/,
+    "l'en-tête n'offre pas le geste du lot");
+  // Le menu d'un document n'a rien à faire ici : ses entrées parleraient d'une
+  // lecture qui n'existe pas.
+  assert.doesNotMatch(html, /lectureCrTransformer/,
+    "le menu d'un document ouvert s'affiche encore à l'accueil");
+});
+
+test("une lecture ouverte retrouve le geste du document, et non celui du lot", () => {
+  // L'inverse du précédent : sans cette épreuve, câbler le lot partout aurait
+  // passé — et un compte rendu lu n'aurait plus eu de « Faire une proposition ».
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+
+  assert.match(html, /lectureCrTransformer/, "la lecture ouverte a perdu son Transformer");
+  assert.doesNotMatch(html, /data-attente-action="porterLeLot"/,
+    "le geste du lot s'affiche sur un document ouvert");
+});
+
+test("un refus posé à l'accueil s'affiche", () => {
+  /**
+   * L'alerte vivait dans `renderCorps`, qui ne dessine rien quand la phase est
+   * « vide » : `refuser()` écrivait son motif dans l'état, l'écran se
+   * redessinait, et **rien n'apparaissait**. Un message qui n'a nulle part où
+   * s'afficher est un message qu'on n'a pas écrit (règle 5).
+   */
+  const motif = "Il n'y a rien à proposer pour l'instant.";
+  const html = renderLaLecture(unAccueilQuiAttend({ motif }));
+
+  assert.match(html, /lecture-cr__alerte/, "l'alerte n'est pas dessinée à l'accueil");
+  assert.match(html, new RegExp(escapeHtml(motif)));
+  // Et elle se ferme : une alerte dont on ne sort pas oblige à recharger.
+  assert.match(html, /data-lecture-cr-alerte-fermer/);
+});
+
+test("sans rien à dire, l'accueil ne dessine pas d'alerte vide", () => {
+  // Un cadre d'alerte permanent ferait lire une panne là où il n'y en a pas.
+  assert.doesNotMatch(renderLaLecture(unAccueilQuiAttend()), /lecture-cr__alerte/);
+});
+
+/* ── Ce que le clic sur le geste du lot ferait ───────────────────────────── */
+
+test("le lot part quand il y a quelque chose à porter", () => {
+  const depart = leDepartDuLot(unAccueilQuiAttend());
+
+  assert.equal(depart.part, true);
+  assert.equal(depart.pourquoi, "");
+  // Et il porte les deux lectures : le lot se recompose au clic, sur le tableau
+  // courant — une liste figée au dessin reverserait ce qui vient d'être versé.
+  assert.equal(depart.porterait.combien, 2);
+});
+
+test("rien à porter : le départ est refusé, et il le dit", () => {
+  /**
+   * **C'est le défaut rapporté**, pris à sa racine. Le gestionnaire sortait ici
+   * sur un `return` nu : le lot ne partait pas, l'écran ne bougeait pas, et il
+   * n'y avait rien à lire — ni à l'écran, ni dans la console.
+   */
+  const depart = leDepartDuLot(unEtat({ dejaLus: [], dejaLusControles: [], dejaLusMails: [] }));
+
+  assert.equal(depart.part, false);
+  assert.equal(depart.pourquoi, POURQUOI_LE_DEPART_EST_REFUSE.PLUS_RIEN_A_PORTER);
+  // Un motif, et une phrase pour le dire : un motif sans phrase ne vaut pas
+  // mieux qu'un silence.
+  assert.ok(phraseDuDepartRefuse(depart.pourquoi).length > 20);
+});
+
+test("une composition en cours refuse le départ sans rien dire de plus", () => {
+  /**
+   * **Le seul refus muet, et il l'est pour une raison** : l'écran affiche déjà
+   * « En cours » avec son étape. Une phrase de refus par-dessus ferait lire un
+   * échec sur une composition qui avance.
+   */
+  const depart = leDepartDuLot(unAccueilQuiAttend({ portage: { enCours: true, etape: null } }));
+
+  assert.equal(depart.part, false);
+  assert.equal(depart.pourquoi, "", "une composition en cours écrit un refus par-dessus");
 });

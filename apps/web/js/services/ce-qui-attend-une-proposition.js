@@ -334,3 +334,67 @@ export function lesFamillesDuLot(porterait = null) {
     }))
     .sort((gauche, droite) => droite.combien - gauche.combien);
 }
+
+/* ── Pourquoi le départ a été refusé ────────────────────────────────────────── */
+
+/**
+ * Pourquoi le clic n'a pas lancé la composition.
+ *
+ * ## Ce n'est pas le même refus que `POURQUOI_PAS_DE_LOT`
+ *
+ * Celui-là dit pourquoi **le bouton est gris** : on le lit avant de cliquer, et
+ * il répond à « qu'est-ce qui manque ? ». Celui-ci dit pourquoi **le clic n'a
+ * rien lancé** alors que le bouton était vert : on le lit *après* avoir cliqué,
+ * et il répond à « pourquoi rien ne s'est passé ? ».
+ *
+ * **C'est le défaut qu'on vient de livrer.** Le gestionnaire sortait sur deux
+ * `return` nus : la composition ne partait pas, l'écran ne bougeait pas, et il
+ * n'y avait rien à lire — ni à l'écran, ni dans la console. Un clic qui ne
+ * produit aucun effet visible est indistinguable d'un bouton mort (règle 5), et
+ * c'est exactement ce qui a été rapporté : « quand je clic sur transformer, il
+ * ne se passe rien ».
+ */
+export const POURQUOI_LE_DEPART_EST_REFUSE = {
+  /**
+   * Il n'y a plus rien à porter **au moment du clic**.
+   *
+   * Le lot se recompose au clic, sur le tableau courant — sans quoi on
+   * porterait une liste périmée. Il peut donc s'être vidé depuis le dessin :
+   * une relecture revenue entre-temps, un autre onglet qui a signé la
+   * proposition, un changement de famille. Le bouton était vert, et il ne
+   * l'était plus quand on a appuyé.
+   */
+  PLUS_RIEN_A_PORTER: "plus_rien_a_porter",
+  /**
+   * Le chantier n'a pas pu être résolu.
+   *
+   * Sans lui, aucune proposition ne peut s'ouvrir : elle n'appartiendrait à
+   * rien. `projetCourant()` rend la chaîne vide quand la résolution échoue — ce
+   * qui arrive hors ligne, ou quand la session a expiré. Partir quand même
+   * aurait fait une erreur de base de données à la première écriture, et un
+   * message qui ne dit rien de ce qu'il faut faire.
+   */
+  SANS_CHANTIER: "sans_chantier"
+};
+
+export const CE_QUE_LE_DEPART_REFUSE_DIT = {
+  [POURQUOI_LE_DEPART_EST_REFUSE.PLUS_RIEN_A_PORTER]:
+    "Rien n'est parti : il n'y avait plus rien à porter au moment du clic. Le "
+    + "lot se recompose à l'instant où l'on appuie, et une lecture revenue "
+    + "entre-temps a pu le vider. Le compte ci-dessus est à jour.",
+  [POURQUOI_LE_DEPART_EST_REFUSE.SANS_CHANTIER]:
+    "Rien n'est parti : le chantier n'a pas pu être retrouvé, et une "
+    + "proposition sans chantier n'appartiendrait à rien. Recharger la page, "
+    + "ou se reconnecter si la session a expiré."
+};
+
+/**
+ * La phrase du refus, ou la chaîne vide quand il n'y a rien à refuser.
+ *
+ * **La chaîne vide et non une phrase d'attente** : c'est elle que l'écran
+ * teste pour savoir s'il a quelque chose à afficher, et une phrase par défaut
+ * ferait apparaître un refus sous un bouton qui n'a jamais été cliqué.
+ */
+export function phraseDuDepartRefuse(pourquoi = "") {
+  return CE_QUE_LE_DEPART_REFUSE_DIT[texte(pourquoi)] ?? "";
+}
