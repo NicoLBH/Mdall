@@ -71,6 +71,34 @@ export function lesDocumentsAEnvoyer(choisis = null, connues = []) {
 }
 
 /**
+ * Pourquoi une lecture ne part pas depuis la vue d'ensemble.
+ *
+ * ## Le défaut que cette phrase ferme
+ *
+ * L'écran retombait silencieusement sur les comptes rendus quand la famille
+ * ouverte n'en était pas une — c'est-à-dire sous « Tous les documents ». Un
+ * rapport de bureau de contrôle choisi là était donc lu par le **procédé des
+ * comptes rendus** : il rendait des points de réunion au lieu d'avis, le
+ * tableau l'annonçait « analysé », et l'appel était payé. Rien, nulle part, ne
+ * disait qu'on avait lu le bon document avec le mauvais outil.
+ *
+ * ## Pourquoi Mdall ne peut pas deviner
+ *
+ * Il ne reste rien à quoi se raccrocher : un compte rendu de chantier et un
+ * rapport de contrôle sont **tous deux des PDF**, et l'extension est la seule
+ * chose qu'on sache d'un document avant de l'ouvrir. Deviner reviendrait à
+ * tirer au sort entre deux procédés dont l'un rendra un résultat faux.
+ *
+ * Ne pas savoir n'autorise pas à prétendre le contraire (règle 5) : on refuse,
+ * et l'on dit où est le geste qui lève l'ambiguïté.
+ */
+export const SANS_PROCEDE_DE_LECTURE =
+  "« Tous les documents » ne dit pas par quel procédé lire : un PDF peut être un "
+  + "compte rendu de chantier ou un rapport de bureau de contrôle, et les deux ne "
+  + "se lisent pas de la même façon. Ouvrez la famille du document dans le rail de "
+  + "gauche, puis relancez.";
+
+/**
  * Ce qu'on dit à l'écran une fois la demande partie.
  *
  * **Elle ne dit pas « c'est lu »**, parce que ce n'est pas lu : c'est parti.
@@ -130,7 +158,7 @@ export async function lancerUneLecture(documents = [], {
    * attente sans que rien ne le dise (règle 5).
    */
   if (!laFamilleQuiSeLit(famille)) {
-    return { parti: false, versementId: "", motif: "cette famille ne se lit pas" };
+    return { parti: false, versementId: "", motif: SANS_PROCEDE_DE_LECTURE };
   }
 
   let versementId = "";

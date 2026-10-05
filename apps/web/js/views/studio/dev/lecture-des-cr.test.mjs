@@ -25,7 +25,8 @@ import {
   leChantierAChange, lesEntreesDuChoix, matiereDuCompteRendu, renderLaLecture,
   reservesDeLaRestitution
 } from "./lecture-des-cr.js";
-import { FAMILLE } from "../../../services/les-familles-de-document.js";
+import { FAMILLE, TOUTES } from "../../../services/les-familles-de-document.js";
+import { SANS_PROCEDE_DE_LECTURE } from "../../../services/lancer-une-lecture.js";
 import { OU_EN_EST } from "../../../services/les-documents-analyses.js";
 import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
 import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
@@ -2280,7 +2281,11 @@ test("seuls les documents lisibles portent une case à cocher", () => {
  * mémoire » là où chaque lecture donne une proposition **à signer** (règle 1).
  */
 test("la barre de lancement annonce le coût et les propositions", () => {
+  // **Sous la famille des comptes rendus**, qui est celle dont parle la phrase :
+  // une proposition à signer est ce qu'un compte rendu produit, et rien d'autre
+  // n'en produit.
   const html = renderLaLecture(unEtat({
+    famille: "comptes_rendus",
     choix: unChoix(),
     coches: new Set(["d1", "d2"]),
     connues: new Map(DES_ENTREES_DU_CHOIX.map((une) => [une.id, une]))
@@ -2986,10 +2991,48 @@ test("le lancement porte la famille ouverte, et non un geste figé", async () =>
   const { fileURLToPath } = await import("node:url");
   const source = readFileSync(fileURLToPath(new URL("./lecture-des-cr.js", import.meta.url)), "utf8");
 
-  assert.match(source, /const famille = laFamilleQuiSeLit\(etat\.famille\) \? etat\.famille : FAMILLE\.CR;/);
   assert.match(source, /demanderUneLecture\(documents, \{ projectId, famille \}\)/);
   // Et ce qu'on annonce au départ s'accorde à la même famille.
   assert.match(source, /leMotDuDepart\(documents\.length, famille\)/);
+
+  /**
+   * **Et plus aucun repli vers une famille écrite en dur.**
+   *
+   * Il y en avait un — `laFamilleQuiSeLit(etat.famille) ? etat.famille :
+   * FAMILLE.CR` —, posé parce que les comptes rendus sont ce qu'on fait le plus
+   * souvent ici. Sous « Tous les documents », il envoyait donc un **rapport de
+   * bureau de contrôle** au lecteur de comptes rendus : l'appel partait, il
+   * était payé, il revenait avec des points de réunion au lieu d'avis, et le
+   * tableau l'annonçait « analysé ».
+   *
+   * C'est ce qui s'est produit sur le premier essai réel, et il a fallu
+   * l'export pour le voir. L'épreuve interdit donc la forme, et non une ligne
+   * précise : `: FAMILLE.CR` réécrit autrement serait le même défaut.
+   */
+  const lancement = source.slice(source.indexOf("async function lancerLaFile"));
+  assert.doesNotMatch(lancement.slice(0, 2000), /\?\s*etat\.famille\s*:/,
+    "le lancement est revenu à un repli de famille");
+});
+
+/**
+ * **Et la vue d'ensemble le dit avant le clic.**
+ *
+ * Celui-là se rend, donc il s'éprouve sur le rendu : la barre porte la raison
+ * tant que la famille n'est pas ouverte, plutôt que de laisser cliquer pour
+ * découvrir un refus.
+ */
+test("sous « Tous les documents », la barre dit pourquoi on ne peut pas lancer", () => {
+  const html = renderLaLecture(unEtat({
+    famille: TOUTES,
+    choix: unChoix(),
+    coches: new Set(["d1", "d2"]),
+    connues: new Map(DES_ENTREES_DU_CHOIX.map((une) => [une.id, une]))
+  }));
+
+  assert.match(html, commeAffichee(SANS_PROCEDE_DE_LECTURE));
+  // Et surtout : elle n'annonce plus des propositions de comptes rendus pour
+  // des documents dont on ne sait pas encore par quoi ils seront lus.
+  assert.doesNotMatch(html, commeAffichee("2 propositions à signer"));
 });
 
 /* ── Le détail d'un rapport de contrôle, dans la coquille commune ─────────── */

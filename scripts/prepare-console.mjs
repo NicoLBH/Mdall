@@ -165,6 +165,10 @@ export const RACINES = [
   // confronte désormais les imports réels des fichiers de `apps/console/js` à ce
   // qui est emporté (règle 10).
   "js/services/la-justesse-de-mdall.js",
+  // La santé des lectures : des comptages sur nos propres tables, pour que la
+  // console lise **en ligne** ce que le système a fait. Elle est ce qui remplace
+  // le bloc de terminal que la rubrique portait sous chaque outil de banc.
+  "js/services/la-sante-des-lectures.js",
   // Le rail commun, celui des Sujets, de la Mémoire et des Actions. La console
   // posait sept blocs à la suite sur une seule page ; elle emploie maintenant
   // la même coque que les écrans de projet, plutôt qu'une navigation à elle qui

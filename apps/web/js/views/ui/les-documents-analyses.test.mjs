@@ -11,10 +11,19 @@ import {
   CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, OUVRIR_UN_DOCUMENT, laFamilleDesignee,
   leDocumentDesigne, renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "./les-documents-analyses.js";
+import { COLONNE_DU_COMPTE, POUSSE_A_DROITE } from "./data-table-shell.js";
 import {
   FAMILLE, OU_EN_EST, TOUTES, lesDocumentsAnalyses, lesDocumentsDuTableau,
   lesDocumentsEnAttente
 } from "../../services/les-documents-analyses.js";
+import {
+  LES_TRIS_DES_DOCUMENTS, SENS, TRI_DES_DOCUMENTS, laCleDuTri
+} from "../../services/le-tri-des-documents.js";
+import { escapeHtml } from "../../utils/escape-html.js";
+
+/** Les clés composées comme l'écran les compose, et non recopiées à la main. */
+const PAR_DOCUMENT = laCleDuTri(TRI_DES_DOCUMENTS.DOCUMENT, SENS.RECENT);
+const PAR_DOCUMENT_ANCIEN = laCleDuTri(TRI_DES_DOCUMENTS.DOCUMENT, SENS.ANCIEN);
 
 const TOUS = lesDocumentsAnalyses({
   mails: [{
@@ -364,7 +373,37 @@ test("l'état est dans sa propre cellule, pas collé au titre", () => {
   // Trois colonnes, et la grille les compte une seule fois : une largeur écrite
   // pour deux colonnes au-dessus de trois décale l'en-tête.
   assert.match(html, /--data-table-cols:\s*minmax\(240px,2fr\) 128px 200px/);
-  assert.match(html, /<div class="data-table-shell__col">État<\/div>/);
+
+  /**
+   * **Et l'en-tête ne les nomme pas.**
+   *
+   * « État » et « Ce que la lecture a valu » tombaient sur une seconde ligne —
+   * la colonne du compte couvre la grille entière — et désignaient donc les
+   * mauvaises colonnes. Une en-tête qui se trompe de colonne est pire qu'une
+   * en-tête muette.
+   */
+  assert.doesNotMatch(html, /<div class="data-table-shell__col">État<\/div>/);
+  assert.doesNotMatch(html, /Ce que la lecture a valu/);
+
+  /**
+   * **Ce qui décrit à gauche, ce qui agit à droite.** Collés l'un à l'autre, le
+   * compte, les pastilles et le menu d'ordre se lisent comme une seule barre, et
+   * l'on cherche le compte au milieu des boutons. Le nom de la classe vit dans
+   * la coque, pas ici : recopié, il se renommerait un jour d'un seul côté et le
+   * menu reviendrait se coller au compte sans que rien ne tombe (règle 10).
+   */
+  const barre = html.slice(html.indexOf(COLONNE_DU_COMPTE));
+  const pousse = barre.indexOf(POUSSE_A_DROITE);
+  /**
+   * **`indexOf` rend `-1`, et `-1 < n` est vrai.** La première écriture de cette
+   * épreuve comparait les deux rangs sans vérifier d'abord que la classe est là :
+   * retirée, elle rendait `-1`, l'assertion passait, et la batterie de mutations
+   * l'a montré en une fois. Un garde qu'on ne peut pas faire tomber n'en est pas
+   * un (règle 4).
+   */
+  assert.ok(pousse >= 0, "l'en-tête ne pousse plus rien à droite");
+  assert.ok(pousse < barre.indexOf("documents-analyses__ligne"),
+    "le menu d'ordre n'est plus dans l'en-tête");
 
   // Le badge vit dans une cellule, et non dans la grille de titre.
   const ou = (quoi) => {
@@ -378,24 +417,39 @@ test("l'état est dans sa propre cellule, pas collé au titre", () => {
 
 /* ── Le tri ───────────────────────────────────────────────────────────────── */
 
-test("le menu de tri porte les deux ordres, avec leur question", () => {
+test("le menu de tri porte les quatre ordres, avec leur question", () => {
   const html = renderLeTableauDesDocuments({ documents: TOUS });
 
   assert.match(html, /Ranger le tableau/);
-  assert.match(html, /Analysé en dernier/);
-  assert.match(html, /Date du document/);
-  // La question sous le libellé : les deux ordres se confondent sans elle.
-  assert.match(html, /Lequel vient d&#39;être lu \?/);
-  assert.match(html, /Lequel est le plus récent sur le chantier \?/);
+  /**
+   * **Les quatre libellés sont relevés du service**, et non recopiés ici. Les
+   * écrire à la main ferait une épreuve qui passe au vert sur un menu où il en
+   * manque un : elle vérifierait les trois qu'elle connaît.
+   */
+  for (const ordre of LES_TRIS_DES_DOCUMENTS) {
+    assert.ok(html.includes(escapeHtml(ordre.libelle)),
+      `le menu ne porte pas « ${ordre.libelle} »`);
+    // La question sous le libellé : deux ordres du même axe se confondent sans
+    // elle — « Analysé en dernier » et « Analysé en premier ».
+    assert.ok(html.includes(escapeHtml(ordre.question)),
+      `« ${ordre.libelle} » ne porte pas sa question`);
+  }
 });
 
-test("le bouton du menu porte l'ordre en cours", () => {
+test("le bouton du menu porte l'ordre en cours, et son sens", () => {
   // « Trier » seul obligerait à ouvrir le menu pour savoir comment c'est rangé.
   const parDefaut = renderLeTableauDesDocuments({ documents: TOUS });
   assert.match(parDefaut, /<span>Analysé en dernier<\/span>/);
+  assert.match(parDefaut, /#sort-desc/, "la flèche ne dit pas le sens");
 
-  const parDocument = renderLeTableauDesDocuments({ documents: TOUS, tri: "document" });
-  assert.match(parDocument, /<span>Date du document<\/span>/);
+  const parDocument = renderLeTableauDesDocuments({ documents: TOUS, tri: PAR_DOCUMENT });
+  assert.match(parDocument, /<span>Document le plus récent<\/span>/);
+
+  // **La flèche monte quand le plus ancien est en tête.** Deux ordres du même
+  // axe portent des libellés voisins : c'est elle qui les sépare d'un coup d'œil.
+  const alEnvers = renderLeTableauDesDocuments({ documents: TOUS, tri: PAR_DOCUMENT_ANCIEN });
+  assert.match(alEnvers, /<span>Document le plus ancien<\/span>/);
+  assert.match(alEnvers, /#sort-asc/);
 });
 
 test("l'ordre choisi change vraiment l'ordre des lignes", () => {
@@ -406,9 +460,15 @@ test("l'ordre choisi change vraiment l'ordre des lignes", () => {
   assert.ok(ou(parAnalyse, "Reprise des enduits") < ou(parAnalyse, "RICT-03.pdf"));
 
   // Par date de document : le rapport (18 avril) avant le fil (2 mars).
-  const parDocument = renderLeTableauDesDocuments({ documents: TOUS, tri: "document" });
+  const parDocument = renderLeTableauDesDocuments({ documents: TOUS, tri: PAR_DOCUMENT });
   assert.ok(ou(parDocument, "RICT-03.pdf") < ou(parDocument, "Reprise des enduits"),
     "le menu de tri est une décoration : l'ordre ne change pas");
+
+  // **Et le sens inverse remet l'autre en tête.** Sans cette épreuve, un sens
+  // ignoré rendrait la même liste et le menu offrirait deux fois le même ordre.
+  const alEnvers = renderLeTableauDesDocuments({ documents: TOUS, tri: PAR_DOCUMENT_ANCIEN });
+  assert.ok(ou(alEnvers, "Reprise des enduits") < ou(alEnvers, "RICT-03.pdf"),
+    "l'ordre inverse rend la même liste que l'ordre direct");
 });
 
 test("le tri vient après le filtre, et sa phrase compte ce qui est montré", () => {
@@ -430,7 +490,7 @@ test("le tri vient après le filtre, et sa phrase compte ce qui est montré", ()
   // Et il ne porte pas de date de document : on ne l'a pas encore lu.
   assert.equal(avecAttente.find((un) => un.titre === "RICT-09.pdf").quand, "");
 
-  const html = renderLeTableauDesDocuments({ documents: avecAttente, tri: "document" });
+  const html = renderLeTableauDesDocuments({ documents: avecAttente, tri: PAR_DOCUMENT });
   // Le document en attente ne porte pas de date de document : il reste à la fin,
   // et la phrase le dit — sinon le tri paraîtrait n'avoir rien trié.
   assert.match(html, /ne porte pas de date de document/);

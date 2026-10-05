@@ -17,8 +17,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CE_QUE_LEXPORT_PORTE, leNomDeLexportDesAnalyses, lexportDesAnalyses,
-  lexportDesAnalysesEnJson, phraseDeLexportDesAnalyses
+  CE_QUE_LEXPORT_PORTE, SANS_ANALYSE_DEMANDEE, leNomDeLexportDesAnalyses,
+  lexportDesAnalyses, lexportDesAnalysesEnJson, phraseDeLexportDesAnalyses
 } from "./lexport-des-analyses.js";
 import { OU_EN_EST } from "./les-documents-analyses.js";
 import { FAMILLE } from "./les-familles-de-document.js";
@@ -191,7 +191,19 @@ test("une analyse vide se dit vide, et une lecture sans analyse le dit aussi", (
   assert.equal(vide.ceQuOnEnLit.vide, true);
   assert.equal(vide.ceQuOnEnLit.releves, 0);
 
-  assert.match(sans.sansAnalyse, /aucune analyse gelée/);
+  /**
+   * **Et la phrase ne dit plus que la lecture n'a rien rendu.**
+   *
+   * Elle disait « cette ligne de lecture ne porte aucune analyse gelée ». Le
+   * premier export réel l'a posée sur les quinze lignes du chantier, analyses
+   * comprises — parce que le tableau **ne demande pas** cette colonne, qui porte
+   * la transcription entière. L'outil fait pour diagnostiquer fabriquait la
+   * panne qu'il cherchait (règle 5).
+   */
+  assert.equal(sans.sansAnalyse, SANS_ANALYSE_DEMANDEE);
+  assert.match(sans.sansAnalyse, /n'a pas été emportée/);
+  assert.match(sans.sansAnalyse, /le tableau ne charge pas la colonne/);
+  assert.doesNotMatch(sans.sansAnalyse, /ne porte aucune analyse/);
   assert.equal(sans.ceQuOnEnLit, null);
 
   assert.equal(pleine.ceQuOnEnLit.vide, false);

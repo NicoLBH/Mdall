@@ -102,7 +102,7 @@ import {
 } from "../../ui/data-table-shell.js";
 import { garderLesPlaces } from "../../ui/garder-le-defilement.js";
 import {
-  leMotDuDepart, lesDocumentsAEnvoyer
+  SANS_PROCEDE_DE_LECTURE, leMotDuDepart, lesDocumentsAEnvoyer
 } from "../../../services/lancer-une-lecture.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
@@ -969,7 +969,14 @@ function ceQueLeChoixFera(famille) {
       + "Le relèvement se fait ici : restez sur cet écran le temps qu'il revienne. "
       + "Rien n'entre dans la mémoire du chantier.";
   }
-  if (famille === FAMILLE.CR || !famille) return null;
+  if (famille === FAMILLE.CR) return null;
+  /**
+   * **Et la vue d'ensemble le dit avant le clic.** Découvrir après coup qu'on
+   * ne pouvait pas lancer vaut mieux que lire par le mauvais procédé, mais
+   * c'est encore un geste payé d'une déception : la barre porte donc la raison
+   * tant que la famille n'est pas ouverte.
+   */
+  if (!laFamilleQuiSeLit(famille)) return SANS_PROCEDE_DE_LECTURE;
 
   return "Chaque document est lu sur le serveur, et sa lecture est conservée. "
     + "Vous pouvez fermer cet écran. Rien n'entre dans la mémoire du chantier.";
@@ -4013,17 +4020,32 @@ async function lancerLaFile(hote) {
   );
   /**
    * **La famille ouverte décide du geste**, donc de la fonction de bord qui
-   * prendra la ligne. Hors d'une famille qui se lit — la vue d'ensemble —, on
-   * retombe sur les comptes rendus : c'est la seule qu'on puisse déposer à la
-   * main depuis cet écran, et elle reste ce qu'on y fait par défaut.
+   * prendra la ligne — et elle n'a plus de repli.
+   *
+   * Elle retombait sur les comptes rendus hors d'une famille qui se lit, au
+   * motif que c'est ce qu'on fait le plus souvent ici. C'était un repli qui
+   * **ment** : sous « Tous les documents », un rapport de bureau de contrôle
+   * partait au lecteur de comptes rendus, revenait avec des points de réunion
+   * au lieu d'avis, et le tableau l'annonçait analysé. L'appel était payé, le
+   * résultat était faux, et rien ne le disait.
+   *
+   * `lancerUneLecture` refuse donc, et sa phrase dit où est le geste qui lève
+   * l'ambiguïté — elle est écrite une fois, dans le service (règle 10).
    */
-  const famille = laFamilleQuiSeLit(etat.famille) ? etat.famille : FAMILLE.CR;
+  const famille = texte(etat.famille);
   const parti = await demanderUneLecture(documents, { projectId, famille });
 
   if (!parti.parti) {
     etat.choix = {
       ...etat.choix, enCours: false,
-      motif: `La lecture n'a pas pu être lancée (${parti.motif || "cause inconnue"}).`
+      /**
+       * **Un refus qui est déjà une phrase se rend tel quel.** Glissé entre
+       * parenthèses derrière « La lecture n'a pas pu être lancée », il se
+       * serait lu comme un code de panne, et non comme le geste à faire.
+       */
+      motif: parti.motif === SANS_PROCEDE_DE_LECTURE
+        ? parti.motif
+        : `La lecture n'a pas pu être lancée (${parti.motif || "cause inconnue"}).`
     };
     redessiner(hote);
     return;

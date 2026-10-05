@@ -61,7 +61,6 @@ export const OUTIL = {
 export const LES_OUTILS = [
   {
     cle: OUTIL.PERTURBATIONS,
-    commande: "node scripts/la-batterie-des-perturbations.mjs --serveur",
     libelle: "La batterie de perturbations",
     question: "Si je dérange le document, la lecture bouge-t-elle comme il faut ?",
     comment: "Six perturbations du document — jamais du code. Un relevé déplacé "
@@ -74,7 +73,6 @@ export const LES_OUTILS = [
   },
   {
     cle: OUTIL.DERIVE,
-    commande: "node scripts/la-derive-des-analyses.mjs --serveur",
     libelle: "La dérive des analyses",
     question: "Le même document, relu, donne-t-il la même chose ?",
     comment: "Lue dans les analyses déjà conservées, sans rien relancer. Elle "
@@ -87,7 +85,6 @@ export const LES_OUTILS = [
   },
   {
     cle: OUTIL.JEU_DE_REFERENCE,
-    commande: "node scripts/le-jeu-de-reference.mjs --serveur",
     libelle: "Le jeu de référence",
     question: "Sur des documents dont je connais la réponse, combien en trouve-t-on ?",
     comment: "Un corpus annoté à la main, étape par étape. Il porte aussi des "
@@ -100,9 +97,6 @@ export const LES_OUTILS = [
   },
   {
     cle: OUTIL.INVARIANTS,
-    // Les invariants sont posés par les deux premiers outils : ils se
-    // remplissent donc avec eux, et n'ont pas de commande à eux.
-    commande: "node scripts/la-batterie-des-perturbations.mjs --serveur",
     libelle: "Les invariants",
     question: "Y a-t-il des choses qui doivent être vraies de toute lecture ?",
     comment: "Les propriétés qu'aucune lecture ne peut violer, quel que soit le "
@@ -115,35 +109,52 @@ export const LES_OUTILS = [
 ];
 
 /**
- * **Comment un bilan arrive ici**, et pourquoi il faut le dire.
+ * **Ce que ces quatre outils sont**, et ce qu'ils ne sont pas.
  *
- * L'écran montrait « jamais lancé » sur les quatre outils, et c'était exact :
- * ils ne déposent que depuis `--serveur`, en terminal. Mais il ne disait pas
- * **comment changer cela** — lancer une analyse dans le produit n'y dépose
- * rien, et personne ne pouvait le deviner. Quatre cartes qui ne se rempliront
- * jamais, sans mode d'emploi : c'est une promesse qu'on ne tient pas (règle 12).
+ * ## Ce que ce paragraphe a d'abord essayé de faire, et pourquoi c'était faux
  *
- * Le premier paragraphe est le plus important, parce qu'il lève la confusion
- * exacte : cet écran ne mesure pas une analyse, il mesure le procédé.
+ * L'écran montrait « jamais lancé » sur les quatre outils. On y a donc écrit la
+ * commande à taper pour les remplir — un bloc de terminal sous chaque carte.
+ *
+ * C'était répondre à côté. Une console d'exploitation **ne demande pas qu'on
+ * ouvre une invite de commandes** : ce qu'on vient y chercher — est-ce que ça
+ * marche ? — doit s'y lire, compté sur nos propres tables. C'est ce que fait
+ * maintenant « Ce que les lectures ont donné », en haut de la page.
+ *
+ * ## Ce qui reste à dire, et qui n'est pas un mode d'emploi
+ *
+ * Ces quatre-là mesurent autre chose, et la différence est ce qu'il faut
+ * comprendre pour lire la page : **les comptages disent ce qui est arrivé, le
+ * banc dit si c'est juste**. L'un se lit en ligne, l'autre demande un corpus
+ * dont on connaît déjà la réponse.
  */
 export const COMMENT_UN_BILAN_ARRIVE = [
   {
-    quoi: "Lancer une analyse ne remplit pas cet écran",
-    pourquoi: "ces quatre outils mesurent le procédé sur un corpus, pas une "
-      + "lecture. « Ce document a-t-il été bien lu ? » se répond dans le détail "
-      + "du document, à l'Atelier ; ici, c'est « le procédé tient-il ? »."
+    quoi: "Les comptages du haut disent ce qui est arrivé",
+    pourquoi: "ils lisent les lectures conservées : combien ont rendu une "
+      + "analyse, combien ont relevé quelque chose, par quel procédé. C'est la "
+      + "santé du système, et elle se remplit toute seule dès qu'un document est "
+      + "lu."
   },
   {
-    quoi: "Ils se lancent depuis un terminal",
-    pourquoi: "avec SUPABASE_URL, SUPABASE_JETON et MDALL_PROJET dans "
-      + "l'environnement, et MDALL_PROCEDE pour nommer le modèle mesuré. La "
-      + "commande de chaque outil est écrite sous son nom."
+    quoi: "Ces quatre-là disent si c'est juste",
+    pourquoi: "et c'est une tout autre question : une lecture qui invente vingt "
+      + "points compte, en haut, exactement comme une lecture qui en relève "
+      + "vingt vrais. Pour les distinguer il faut un document dont on connaît "
+      + "déjà la réponse, ou le même document relu deux fois."
   },
   {
-    quoi: "Sans --serveur, rien ne se dépose",
-    pourquoi: "et c'est voulu : l'auto-épreuve mesure deux lecteurs de carton. "
-      + "Déposer son bilan montrerait la justesse de l'instrument comme celle du "
-      + "produit — un écran vert obtenu sans avoir lu un seul document."
+    quoi: "Ils mesurent un procédé, jamais une analyse",
+    pourquoi: "« ce document a-t-il été bien lu ? » se répond dans le détail du "
+      + "document, à l'Atelier. Ici, c'est « le procédé tient-il ? » — et cela "
+      + "se mesure sur un corpus, pas sur une lecture."
+  },
+  {
+    quoi: "Leurs bilans sont des nombres, et rien d'autre",
+    pourquoi: "la base refuse un bilan qui nomme un document, et jette toute "
+      + "valeur qui n'est pas un nombre. C'est ce qui permet à cette page "
+      + "d'exister : une console qui lirait le chantier de quelqu'un n'aurait "
+      + "pas le droit d'être ouverte."
   }
 ];
 

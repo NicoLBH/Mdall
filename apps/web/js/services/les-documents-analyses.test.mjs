@@ -411,3 +411,81 @@ test("un document en attente n'a pas de date de document, et garde celle de la f
     "la date de la file passe pour la date du document : le tri le mettrait en tête");
   assert.equal(attente.lueLe, "2026-10-04T09:00:00Z");
 });
+
+/* ── Les trois familles passent par la même porte ─────────────────────────── */
+
+/**
+ * **L'épreuve qui manquait, et ce qu'elle a coûté de ne pas exister.**
+ *
+ * Le tableau lit les trois familles par **une seule** fonction,
+ * `unDocumentAnalyse`, qui va chercher `created_at`, `lu_par` et `document_id`.
+ * Chaque famille arrive par son propre groupeur — `lesFilsLus`,
+ * `lesComptesRendusLus`, `lesRapportsLus` —, et celui des rapports recopiait la
+ * ligne sous d'autres noms : `created_at` y était devenu `lueLe`,
+ * `document_id` était devenu `documentId`.
+ *
+ * `unDocumentAnalyse` lisait donc `undefined` et rendait la chaîne vide. **Sans
+ * erreur, et sans rien pour le dire.** Les quatre rapports d'un chantier réel
+ * sont arrivés sans date d'analyse, sans lecteur et sans document : le tri ne
+ * pouvait pas les ranger, le choix depuis Fichiers ne pouvait pas dire qu'ils
+ * étaient déjà analysés, et il a fallu lire un export pour le voir.
+ *
+ * L'épreuve part donc des lignes **telles que la base les rend**, les fait
+ * passer par le groupeur de chaque famille, et vérifie que ce que le tableau
+ * lit est arrivé. Une fixture écrite à la forme attendue n'aurait rien éprouvé :
+ * elle aurait recopié l'hypothèse du code.
+ */
+test("ce que la base écrit traverse les trois groupeurs jusqu'au tableau", async () => {
+  const [{ lesFilsLus }, { lesComptesRendusLus }, { lesRapportsLus }] = await Promise.all([
+    import("./la-lecture-dun-fil.js"),
+    import("./la-lecture-conservee.js"),
+    import("./la-lecture-dun-rapport.js")
+  ]);
+
+  // Les colonnes telles que les migrations les déclarent — pas une forme choisie
+  // pour que l'épreuve passe.
+  const LU_LE = "2026-10-05T12:46:59Z";
+  const lignes = {
+    mails: lesFilsLus([{
+      id: "f-1", project_id: "p-1", objet: "Reprise des enduits",
+      finit_le: "2026-03-02", mesures: { messages: 4 },
+      lu_par: "modèle · lecture d'un fil v1", created_at: LU_LE
+    }]),
+    crs: lesComptesRendusLus([{
+      id: "c-1", project_id: "p-1", document: "CR-12.pdf", document_id: "doc-c-1",
+      numero_de_reunion: "12", tenue_le: "2026-04-02", mesures: { points: 20 },
+      lu_par: "modèle · lecture de CR v1", created_at: LU_LE
+    }]),
+    controles: lesRapportsLus([{
+      id: "r-1", project_id: "p-1", document: "RICT-03.pdf", document_id: "doc-r-1",
+      numero_de_rapport: "RICT-03", etabli_le: "2026-04-18", nature: "rapport initial",
+      legende: [{ marque: "S", signification: "Suspendu" }], mesures: { avis: 7 },
+      lu_par: "modèle · lecture d'un rapport v1", created_at: LU_LE
+    }])
+  };
+
+  const tableau = lesDocumentsAnalyses(lignes);
+  assert.equal(tableau.length, 3, "une famille n'est pas arrivée jusqu'au tableau");
+
+  for (const document of tableau) {
+    assert.equal(document.lueLe, LU_LE,
+      `${document.famille} : la date d'analyse ne traverse pas son groupeur`);
+    assert.ok(document.luPar,
+      `${document.famille} : le lecteur ne traverse pas son groupeur`);
+    assert.ok(document.titre && document.titre !== ceQueDitLaFamille(document.famille).nom,
+      `${document.famille} : le titre ne traverse pas son groupeur`);
+    assert.ok(document.dit, `${document.famille} : les mesures ne traversent pas`);
+  }
+
+  // **La date du document, et le document de Fichiers.** Un fil n'en a pas : il
+  // n'est pas une ligne de Fichiers, et sa date est celle du dernier message —
+  // déjà vérifiée par `lueLe` ci-dessus. Les deux autres en ont, et c'est par
+  // `documentId` que le choix depuis Fichiers sait ce qui est déjà analysé.
+  for (const famille of [FAMILLE.CR, FAMILLE.CONTROLE]) {
+    const document = tableau.find((un) => un.famille === famille);
+    assert.ok(document.documentId,
+      `${famille} : le document de Fichiers ne traverse pas son groupeur`);
+    assert.ok(document.quand,
+      `${famille} : la date du document ne traverse pas son groupeur`);
+  }
+});

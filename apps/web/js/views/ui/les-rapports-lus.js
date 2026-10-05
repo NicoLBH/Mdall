@@ -130,8 +130,12 @@ function renderUnRapportLu(rapport, { ouverte = "" } = {}) {
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
             escapeHtml([
-              texte(rapport?.numero) ? `n° ${texte(rapport.numero)}` : "",
-              texte(rapport?.etabliLe),
+              // **Les noms de la base, parce que la ligne est celle de la
+              // base.** `lesRapportsLus` la recopiait sous d'autres noms ; elle
+              // la rend désormais telle quelle, comme les deux autres familles.
+              texte(rapport?.numero_de_rapport)
+                ? `n° ${texte(rapport.numero_de_rapport)}` : "",
+              texte(rapport?.etabli_le),
               texte(rapport?.nature),
               // **Relu n'est pas « lu deux fois le même jour ».** On relit en
               // ajustant une consigne, et c'est la dernière lecture qu'on ouvre.

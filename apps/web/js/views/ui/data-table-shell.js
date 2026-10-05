@@ -123,3 +123,17 @@ export function renderDataTableCount({ iconeHtml = "", dit = "", titre = "" } = 
 
 /** La classe de la cellule d'en-tête qui porte ce compte. Écrite une fois. */
 export const COLONNE_DU_COMPTE = "data-table-shell__head-col--compte";
+
+/**
+ * Ce qui, dans une en-tête, se pousse à droite.
+ *
+ * L'en-tête d'un tableau porte deux choses de nature différente : ce qui
+ * **décrit** ce qu'on voit — le compte, les filtres —, et ce qui **agit**
+ * dessus — un menu d'ordre. Collées l'une à l'autre, on les lit comme une seule
+ * barre et l'on cherche le compte au milieu des boutons.
+ *
+ * Le nom vit ici, avec celui de la colonne du compte : écrit dans la feuille de
+ * style et recopié dans chaque écran, il se renommerait un jour d'un seul côté
+ * et le menu reviendrait se coller au compte, sans que rien ne tombe (règle 10).
+ */
+export const POUSSE_A_DROITE = "data-table-shell__head-pousse";
