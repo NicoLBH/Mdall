@@ -35,6 +35,10 @@ import {
 // Les mots des états viennent du tableau des analyses : deux écrans qui parlent
 // du même document avec deux mots différents finiraient par se contredire.
 import { CE_QUE_DIT_LETAT_DUN, OU_EN_EST } from "../../services/les-documents-analyses.js";
+// **La même coupe que le tableau des analyses.** Les deux listent les mêmes
+// documents du même chantier : deux façons de raccourcir un nom auraient donné
+// deux noms différents pour un même fichier, d'un écran à l'autre (règle 10).
+import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 /**
@@ -96,6 +100,19 @@ export function renderLeChemin(breadcrumb = []) {
  * Ce qui reste est **le refus**, et seulement lui : « Mdall ne sait pas lire ce
  * format » ne se déduit pas d'un nom de fichier, et sans lui un document éteint
  * le serait sans raison (règle 5). Il tient sur la même ligne, en retrait.
+ *
+ * ## Deux colonnes, finalement — et pour la raison inverse
+ *
+ * L'état de l'analyse vivait **à la suite du nom**, comme le refus. Sur un
+ * dossier de rapports de bureau de contrôle, les noms font cent trente
+ * caractères : le badge était poussé hors de la ligne sur **toutes** les lignes,
+ * et l'on cochait de nouveau ce qui était déjà analysé — l'appel payé deux fois
+ * que cette colonne existe précisément pour éviter.
+ *
+ * Il prend donc une colonne, toujours au même endroit, comme dans le tableau des
+ * analyses. Et le nom se coupe **par le milieu** : coupé par la fin, deux
+ * rapports du même chantier qui ne diffèrent que par leur numéro d'indice sont
+ * le même nom.
  */
 function renderUneEntree(entree, choisis = null) {
   const dossier = entree.type === ENTREE.DOSSIER;
@@ -106,6 +123,7 @@ function renderUneEntree(entree, choisis = null) {
   const dit = refus || (entree.lecture ? (CE_QUE_CA_DEMANDE[entree.lecture] ?? "") : "");
   const coche = !dossier && entree.choisissable;
   const cochee = coche && Boolean(choisis?.has?.(entree.id));
+  const nom = ceQuUnNomMontre(entree.nom);
 
   return `
     <div class="documents-repo__row documents-repo__row--file${
@@ -119,13 +137,27 @@ function renderUneEntree(entree, choisis = null) {
           : ""}</span>
         <span class="documents-repo__icon">${
           svgIcon(dossier ? "file-directory" : "file", { className: "octicon" })}</span>
+        ${/*
+          **L'infobulle porte le nom entier dès qu'il a été coupé**, et ce qu'il
+          coûtera sinon. Les deux ne tiennent pas ensemble, et c'est le nom qui
+          l'emporte : le prix est annoncé dans la barre de lancement, pour toute
+          la file, alors que le nom coupé ne se retrouve nulle part ailleurs.
+        */""}
         ${marque
           ? `<button type="button" class="choisir-fichier__nom" ${marque}
-               ${dit ? `title="${escapeHtml(dit)}"` : ""}>${escapeHtml(entree.nom)}</button>`
-          : `<span class="documents-repo__name">${escapeHtml(entree.nom)}</span>`}
-        ${renderOuEnEst(entree)}
+               ${nom.titre || dit
+                 ? `title="${escapeHtml(nom.titre || dit)}"` : ""}>${
+                 escapeHtml(nom.dit)}</button>`
+          : `<span class="documents-repo__name"${nom.titre
+              ? ` title="${escapeHtml(nom.titre)}"` : ""}>${escapeHtml(nom.dit)}</span>`}
         ${refus ? `<span class="choisir-fichier__refus mono-small">${escapeHtml(refus)}</span>` : ""}
       </div>
+      ${/*
+        **La colonne de l'état**, vide pour un dossier : un dossier ne s'analyse
+        pas, et y écrire « jamais analysé » en ferait un document qu'on croirait
+        pouvoir lancer.
+      */""}
+      <div class="documents-repo__cell">${dossier ? "" : renderOuEnEst(entree)}</div>
     </div>
   `;
 }
@@ -289,6 +321,12 @@ export function renderChoisirUnFichier({
                     </span>
                     <span class="mono-small">Ce dossier</span>
                   </div>
+                  ${/*
+                    **La colonne porte son nom ici, et nulle part ailleurs.**
+                    C'est la seule ligne d'en-tête de cette liste, et sans elle
+                    une colonne de badges épars ne dit pas à quoi elle répond.
+                  */""}
+                  <div class="documents-repo__cell mono-small">Déjà analysé ?</div>
                 </div>
               `; })() : ""}
               ${entrees.map((une) => renderUneEntree(une, choisis)).join("")}

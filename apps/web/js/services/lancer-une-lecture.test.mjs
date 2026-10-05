@@ -9,7 +9,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  GESTE_DES_CR, lancerUneLecture, leMotDuDepart, lesDocumentsAEnvoyer
+  GESTE_DES_CR, SANS_PROCEDE_DE_LECTURE, lancerUneLecture, leMotDuDepart,
+  lesDocumentsAEnvoyer
 } from "./lancer-une-lecture.js";
 import { FAMILLE, TOUTES } from "./les-familles-de-document.js";
 
@@ -161,8 +162,21 @@ test("une famille qui ne se lit pas ne pose pas de ligne", async () => {
   });
 
   assert.equal(parti.parti, false);
-  assert.match(parti.motif, /ne se lit pas/);
   assert.equal(posee, false);
+
+  /**
+   * **Et le refus nomme le geste, et non une cause de panne.**
+   *
+   * Il disait « cette famille ne se lit pas » — exact, et inutilisable : on ne
+   * voyait pas qu'il suffisait d'ouvrir la famille dans le rail. Pire, l'écran
+   * ne posait même pas la question, puisqu'il retombait silencieusement sur les
+   * comptes rendus et faisait lire un rapport de contrôle par le mauvais
+   * procédé.
+   */
+  assert.equal(parti.motif, SANS_PROCEDE_DE_LECTURE);
+  assert.match(parti.motif, /Ouvrez la famille du document/);
+  // Et il dit **pourquoi** on ne peut pas deviner : les deux sont des PDF.
+  assert.match(parti.motif, /compte rendu de chantier ou un rapport de bureau de contrôle/);
 });
 
 test("ce qui attend à la fin n'est pas le même pour toutes les familles", () => {

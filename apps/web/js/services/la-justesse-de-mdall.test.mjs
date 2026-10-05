@@ -260,29 +260,45 @@ test("l'ordre de la base n'est pas supposé", () => {
 /* ── Les outils déclarés ──────────────────────────────────────────────────── */
 
 /**
- * **« Jamais lancé » sans le geste qui le change est un constat inutile.**
+ * **Aucune commande ne sort d'ici.**
  *
- * On a lancé une analyse dans le produit et l'écran est resté vide, ce qui était
- * exact : ces outils ne déposent que depuis `--serveur`. Mais rien ne disait
- * comment changer cela — quatre cartes qui ne se rempliront jamais (règle 12).
+ * L'écran portait un bloc de terminal sous chaque outil, pour que « jamais
+ * lancé » ne soit pas un constat dont on ne peut rien faire. C'était répondre à
+ * côté : une console d'exploitation ne demande pas qu'on ouvre une invite de
+ * commandes. Ce qu'on vient y chercher se compte maintenant sur nos propres
+ * tables, en haut de la page.
+ *
+ * Et le champ est parti avec le bloc : un champ que plus rien ne dessine se
+ * remet à être rempli au prochain outil ajouté, sans que rien ne le montre
+ * (règle 1).
  */
-test("chaque outil porte la commande qui le remplit", () => {
+test("aucun outil ne porte de ligne de commande", () => {
   for (const outil of LES_OUTILS) {
-    assert.match(outil.commande, /^node scripts\/[a-z-]+\.mjs --serveur$/,
-      `${outil.cle} ne dit pas comment on le lance`);
+    assert.equal(outil.commande, undefined,
+      `${outil.cle} porte encore une commande de terminal`);
   }
+
+  const tout = [
+    ...LES_OUTILS.map((un) => `${un.libelle} ${un.question} ${un.comment} ${un.attrape}`),
+    ...COMMENT_UN_BILAN_ARRIVE.map((un) => `${un.quoi} ${un.pourquoi}`)
+  ].join(" ");
+  assert.doesNotMatch(tout, /node scripts\//, "une commande est restée dans un texte");
+  assert.doesNotMatch(tout, /--serveur/);
+  assert.doesNotMatch(tout, /SUPABASE_JETON/);
 });
 
-test("l'écran dit que lancer une analyse ne le remplit pas", () => {
-  // C'est la confusion exacte qu'il faut lever, et elle est en premier : cet
-  // écran mesure le procédé, pas une analyse.
-  const premier = COMMENT_UN_BILAN_ARRIVE[0];
-  assert.match(premier.quoi, /Lancer une analyse ne remplit pas cet écran/);
-  assert.match(premier.pourquoi, /se répond dans le détail du document/);
-
+/**
+ * **Ce que la page doit faire comprendre**, et qui n'est pas un mode d'emploi :
+ * les comptages du haut disent ce qui est **arrivé**, ces quatre-là disent si
+ * c'est **juste**. Sans cette distinction, un écran vert en haut se lit « les
+ * documents sont bien lus », ce qu'aucun compte ne dit.
+ */
+test("l'écran distingue ce qui est arrivé de ce qui est juste", () => {
   const tout = COMMENT_UN_BILAN_ARRIVE.map((un) => `${un.quoi} ${un.pourquoi}`).join(" ");
-  assert.match(tout, /SUPABASE_JETON/, "l'environnement à poser n'est pas dit");
-  assert.match(tout, /--serveur/);
+  assert.match(tout, /disent ce qui est arrivé/);
+  assert.match(tout, /disent si c'est juste/);
+  // Et la confusion de départ reste levée : on mesure un procédé, pas une analyse.
+  assert.match(tout, /se répond dans le détail du document/);
 });
 
 test("chaque outil déclare ce qu'il ne sait pas voir", () => {

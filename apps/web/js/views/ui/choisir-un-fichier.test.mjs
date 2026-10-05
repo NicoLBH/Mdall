@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { renderChoisirUnFichier, renderLeChemin } from "./choisir-un-fichier.js";
+import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
+import { escapeHtml } from "../../utils/escape-html.js";
+
+/** Un texte tel que la page le porte : `escapeHtml` change les apostrophes. */
+const commeAffichee = (quoi) => new RegExp(escapeHtml(quoi).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 import { CE_QUE_DIT_LETAT_DUN, OU_EN_EST } from "../../services/les-documents-analyses.js";
 import {
   ENTREE, LECTURE_DU_CHOIX, entreesDuDossier
@@ -250,4 +255,109 @@ test("un document déjà analysé se coche quand même", () => {
   // Quatre cases, une par document : aucun état n'en retire.
   assert.equal((html.match(/data-choisir-coche=/g) ?? []).length, 4,
     "un état d'analyse empêche de cocher");
+});
+
+/* ── Un nom de cent trente caractères ─────────────────────────────────────── */
+
+/** Un vrai nom de rapport de bureau de contrôle, de la longueur qu'ils ont. */
+const UN_NOM_INTERMINABLE =
+  "16-04-25_-_74CHAMONIXCENTRE_RECHERCHE_ECOSYSTEMESRENOVEXTENS__CONSTRCENSEMBLE_"
+  + "BURX__LOCX_PARTAGESCT-Rapport_RFCT-CT-13860-0425-0216.pdf";
+
+/**
+ * **Le défaut : on cochait à l'aveugle, et l'on repayait.**
+ *
+ * L'état de l'analyse suivait le nom sur la même ligne. Sur un dossier de
+ * rapports, dont les noms font cent trente caractères, il était poussé hors de
+ * la ligne sur **toutes** les lignes — et l'on recochait ce qui était déjà
+ * analysé, c'est-à-dire l'appel payé deux fois que ce badge existe pour éviter.
+ */
+test("l'état a sa colonne, et ne suit plus un nom de cent trente caractères", () => {
+  const html = renderChoisirUnFichier({
+    entrees: [{
+      type: ENTREE.FICHIER, id: "a", nom: UN_NOM_INTERMINABLE, choisissable: true,
+      pourquoi: "", lecture: "pdf", ou: OU_EN_EST.ANALYSE, motif: ""
+    }]
+  });
+
+  // Le badge est dans une cellule à lui, après celle du nom.
+  const apresLeNom = html.indexOf("documents-repo__cell--name");
+  const ou = html.indexOf("choisir-fichier__etat");
+  assert.ok(apresLeNom >= 0 && ou > apresLeNom, "le badge est resté dans la cellule du nom");
+  assert.match(html, /<div class="documents-repo__cell">\s*<span class="choisir-fichier__etat/);
+});
+
+/**
+ * **Le nom se coupe par le milieu, et son entier est au survol.**
+ *
+ * Coupé par la fin — ce que fait `text-overflow: ellipsis` —, deux rapports du
+ * même chantier qui ne diffèrent que par leur indice sont **le même nom**. La
+ * coupe est celle du tableau des analyses : deux façons de raccourcir auraient
+ * donné deux noms différents pour un même fichier, d'un écran à l'autre.
+ */
+test("un nom trop long se coupe par le milieu, et porte son entier au survol", () => {
+  const html = renderChoisirUnFichier({
+    entrees: [{
+      type: ENTREE.FICHIER, id: "a", nom: UN_NOM_INTERMINABLE, choisissable: true,
+      pourquoi: "", lecture: "pdf", ou: OU_EN_EST.JAMAIS, motif: ""
+    }]
+  });
+
+  const coupe = ceQuUnNomMontre(UN_NOM_INTERMINABLE);
+  assert.ok(coupe.dit.length < UN_NOM_INTERMINABLE.length, "la fixture ne coupe rien");
+
+  // Le nom affiché est le nom coupé, et le nom entier ne s'affiche pas.
+  assert.match(html, commeAffichee(coupe.dit));
+  assert.doesNotMatch(html, new RegExp(`>${UN_NOM_INTERMINABLE.slice(0, 80)}`),
+    "le nom entier est affiché : il pousse l'état hors de la ligne");
+
+  // **Le début et la fin sont tous deux là** : c'est le début qui dit le
+  // chantier, et la fin qui dit le numéro d'indice.
+  assert.ok(html.includes(UN_NOM_INTERMINABLE.slice(0, 10)), "le début du nom a été perdu");
+  assert.ok(html.includes(UN_NOM_INTERMINABLE.slice(-12)), "la fin du nom a été perdue");
+
+  // Et l'infobulle porte l'entier : c'est le seul endroit où on le retrouve.
+  assert.ok(html.includes(`title="${escapeHtml(UN_NOM_INTERMINABLE)}"`),
+    "le nom entier ne se retrouve nulle part");
+});
+
+/**
+ * **La feuille de style déclare bien deux colonnes.**
+ *
+ * C'est le seul défaut de cette série qu'aucun rendu ne peut montrer : le
+ * balisage porterait ses deux cellules, la grille n'en déclarerait qu'une, et la
+ * seconde se replierait **sous** la première — une colonne de badges décalée
+ * d'une ligne, ce qui est pire que pas de colonne du tout. On lit donc la
+ * feuille, ce qu'on ne s'autorise que pour ce genre de défaut invisible.
+ */
+test("la grille du choix déclare la colonne de l'état", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const feuille = readFileSync(
+    fileURLToPath(new URL("../../../style.css", import.meta.url)), "utf8");
+
+  const corps = feuille.slice(feuille.indexOf(".choisir-fichier__corps{"));
+  const grille = corps.slice(0, corps.indexOf("}"));
+  assert.match(grille, /--data-table-cols:\s*minmax\(0, 1fr\) 128px;/,
+    "le balisage porte deux cellules et la grille n'en déclare qu'une");
+});
+
+/** Un nom court ne porte pas d'infobulle : elle répéterait ce qui est lisible. */
+test("un nom qui tient en entier ne porte pas d'infobulle de nom", () => {
+  const html = renderChoisirUnFichier({
+    entrees: [{
+      type: ENTREE.FICHIER, id: "a", nom: "CR_16.pdf", choisissable: true,
+      pourquoi: "", lecture: "", ou: OU_EN_EST.JAMAIS, motif: ""
+    }]
+  });
+  assert.doesNotMatch(html, /title="CR_16\.pdf"/);
+});
+
+/**
+ * **La colonne porte son nom**, une fois, sur la ligne d'en-tête du dossier.
+ * Une colonne de badges épars ne dit pas à quoi elle répond.
+ */
+test("l'en-tête du dossier nomme la colonne de l'état", () => {
+  const html = renderChoisirUnFichier({ entrees: QUATRE_ETATS });
+  assert.match(html, /Déjà analysé \?/);
 });

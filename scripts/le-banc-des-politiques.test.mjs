@@ -140,6 +140,12 @@ const LES_MIGRATIONS = [
   // Sa contrainte `bilan_sans_contenu` est une promesse tenue par la structure,
   // et une promesse de ce genre ne se relit pas — elle s'essaie.
   "202611250001_les_mesures_de_justesse.sql",
+  // La santé des lectures : des comptages sur les trois tables de lectures, pour
+  // que la console lise ce que le système a fait **en ligne**, et non ce qu'un
+  // outil de banc a bien voulu y déposer depuis un terminal. Elle est ici parce
+  // qu'une promesse de ce genre — « des nombres, jamais un contenu » — ne se
+  // relit pas : elle s'essaie.
+  "202611260001_la_sante_des_lectures.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -4513,4 +4519,167 @@ test("relire la justesse se refuse aux autres, et laisse une ligne",
     const journal = banc.sql("select page from public.acces_administrateurs;");
     assert.match(journal.sortie, /exploitation\/justesse/,
       "lire la justesse ne laisse aucune trace");
+  });
+
+/* ── La santé des lectures, lue dans nos propres tables ───────────────────── */
+
+/**
+ * **Ce que cette fonction remplace, et pourquoi elle s'éprouve ici.**
+ *
+ * La rubrique de la console ne montrait que les bilans de quatre outils de banc,
+ * qu'on lance à la main depuis une invite de commandes — et sur une installation
+ * qui n'en avait jamais reçu, elle affichait quatre fois « jamais lancé ». Une
+ * console d'exploitation lit ce que le système **a déjà fait**.
+ *
+ * Elle est `security definer` : elle lit les lectures de **tous** les chantiers,
+ * en passant par-dessus les politiques qui les tiennent privées. C'est
+ * exactement le genre de fonction dont la promesse — « des nombres, jamais un
+ * contenu » — ne se relit pas : elle s'essaie.
+ */
+function unChantierLu(banc) {
+  banc.sql("delete from public.cr_lectures; delete from public.rapport_lectures; "
+    + "delete from public.fil_lectures;");
+
+  // Trois comptes rendus : deux qui ont relevé, un qui n'a rien rendu.
+  banc.sql(`insert into public.cr_lectures
+    (project_id, document, document_id, mesures, lu_par, analyse_gelee) values
+    ('${MEDIATHEQUE}', 'CR-12.pdf', null, '{"points": 20}', 'modele A · lecture de CR v1',
+     '{"lecture": {}}'),
+    ('${MEDIATHEQUE}', 'CR-13.pdf', null, '{"points": 0}', 'modele A · lecture de CR v1',
+     '{"lecture": {}}'),
+    ('${MEDIATHEQUE}', 'CR-14.pdf', null, '{}', 'modele B · lecture de CR v1', null);`);
+
+  // Un rapport, lu par un autre procédé.
+  banc.sql(`insert into public.rapport_lectures
+    (project_id, document, mesures, lu_par, analyse_gelee) values
+    ('${MEDIATHEQUE}', 'RICT-03.pdf', '{"avis": 7}', 'modele A · lecture d''un rapport v1',
+     '{"lecture": {}}');`);
+}
+
+test("la santé des lectures compte ce que le système a fait",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    unChantierLu(banc);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select (familles -> 0) from public.la_sante_des_lectures(30);");
+    assert.equal(lu.ok, true, lu.motif);
+
+    // Les familles sont rangées par nom : les comptes rendus viennent en tête.
+    assert.match(lu.sortie, /"famille": "comptes_rendus"/);
+    assert.match(lu.sortie, /"lectures": 3/);
+    // **Deux des trois ont gelé une analyse.** Une lecture sans analyse est une
+    // lecture qui n'a rien rendu, et l'écran annonce pourtant « analysé ».
+    assert.match(lu.sortie, /"avec_analyse": 2/);
+  });
+
+/**
+ * **Trois cas, et non deux.** « 20 points », « 0 point » et « on n'a pas
+ * mesuré » appellent trois gestes différents, et `Number(null)` vaut zéro —
+ * qui est fini. Les fondre ferait lire « deux lectures sans aucun point » là où
+ * l'une n'a simplement rien mesuré (règle 5).
+ */
+test("relevé, zéro relevé et non mesuré ne se confondent pas",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    unChantierLu(banc);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select (familles -> 0) from public.la_sante_des_lectures(30);");
+    assert.match(lu.sortie, /"avec_releve": 1/, "« 20 points » ne compte pas comme relevé");
+    assert.match(lu.sortie, /"sans_releve": 1/, "« 0 point » ne se distingue pas");
+    assert.match(lu.sortie, /"releve_inconnu": 1/,
+      "une lecture sans mesure est comptée comme ayant relevé zéro");
+  });
+
+/**
+ * **Deux procédés en vie font deux états du système, et non une moyenne.** Le
+ * plus récent n'est pas « l'état du système » tant qu'on n'a pas dit lequel est
+ * en service.
+ */
+test("la santé des lectures dit par quel procédé on a lu",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    unChantierLu(banc);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select (familles -> 0 -> 'procedes') from public.la_sante_des_lectures(30);");
+    // **`jsonb` range ses clés à sa façon** : l'ordre de `jsonb_build_object`
+    // n'est pas celui qu'on relit. On relit donc l'objet, et non sa mise en page.
+    const procedes = JSON.parse(lu.sortie.trim());
+    assert.deepEqual(
+      procedes.map((un) => [un.procede, un.combien]),
+      [["modele A · lecture de CR v1", 2], ["modele B · lecture de CR v1", 1]],
+      "les procédés sont fondus, ou rangés autrement que par usage");
+  });
+
+/**
+ * **La promesse structurelle : des nombres, jamais un contenu.**
+ *
+ * C'est l'essai qui compte. La fonction lit des tables qui portent des noms de
+ * fichiers, des transcriptions entières et des avis de bureau de contrôle ; il
+ * suffirait d'un `jsonb_build_object('document', c.document)` ajouté un jour
+ * pour que la console d'un administrateur se mette à montrer le chantier d'un
+ * client. On relit donc ce qu'elle rend, en entier, et l'on y cherche ce qui
+ * n'a rien à y faire.
+ */
+test("la santé des lectures ne porte aucun nom de document",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    unChantierLu(banc);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select familles::text || ' ' || files::text from public.la_sante_des_lectures(30);");
+    assert.equal(lu.ok, true, lu.motif);
+
+    for (const contenu of ["CR-12.pdf", "CR-13.pdf", "RICT-03.pdf", MEDIATHEQUE]) {
+      assert.ok(!lu.sortie.includes(contenu),
+        `la console montre « ${contenu} », qui est le chantier de quelqu'un`);
+    }
+  });
+
+/** La porte, et le journal : comme toutes les autres fonctions de la console. */
+test("la santé des lectures se refuse aux autres, et laisse une ligne",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.acces_administrateurs;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.la_sante_des_lectures(30);");
+    assert.equal(etranger.ok, false, "un compte ordinaire lit la santé des lectures");
+    assert.equal(
+      banc.sql("select count(*) from public.acces_administrateurs;").sortie.trim(), "0",
+      "un refus laisse une ligne au journal des accès");
+
+    banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.la_sante_des_lectures(30);");
+    assert.match(banc.sql("select page from public.acces_administrateurs;").sortie,
+      /exploitation\/justesse/, "lire la santé ne laisse aucune trace");
+  });
+
+/**
+ * **Un chantier sans aucune lecture ne se dit pas en panne.**
+ *
+ * `[]` et « on n'a pas su demander » ne sont pas la même chose, et c'est l'écran
+ * qui tranche. Ce que la base doit garantir, c'est qu'elle rend bien une ligne —
+ * une fonction qui ne rendrait rien ferait lire « la console n'a pas répondu ».
+ */
+test("sans aucune lecture, la santé rend quand même sa ligne",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    banc.sql("delete from public.cr_lectures; delete from public.rapport_lectures; "
+      + "delete from public.fil_lectures;");
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select familles::text, (depuis is not null), (regarde_le is not null) "
+      + "from public.la_sante_des_lectures(30);");
+    assert.equal(lu.ok, true, lu.motif);
+    assert.match(lu.sortie, /\[\]\s*\|\s*t\s*\|\s*t/,
+      "la fonction ne rend pas sa fenêtre, ou ne rend pas de ligne du tout");
   });

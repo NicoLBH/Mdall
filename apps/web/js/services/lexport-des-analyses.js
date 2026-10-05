@@ -60,6 +60,18 @@ export function leNomDeLexportDesAnalyses(quand = new Date()) {
   return `mdall-analyses-${jour.toISOString().slice(0, 16).replace(":", "-")}.json`;
 }
 
+/**
+ * Ce que l'absence d'analyse veut dire — **et ce qu'elle ne veut pas dire**.
+ *
+ * Écrit une fois, et lu par l'épreuve : une phrase de diagnostic qui se
+ * recopierait se corrigerait d'un seul côté (règle 10).
+ */
+export const SANS_ANALYSE_DEMANDEE =
+  "L'analyse n'a pas été emportée : le tableau ne charge pas la colonne qui la "
+  + "porte, parce qu'elle contient la transcription entière. Ce n'est donc pas "
+  + "« cette lecture n'a rien rendu » — pour le savoir, ouvrez la ligne dans "
+  + "l'écran, ce qui la demande pour elle seule.";
+
 /** Ce que ce fichier porte, écrit dedans : on le relira loin de cet écran. */
 export const CE_QUE_LEXPORT_PORTE =
   "Ce fichier porte le contenu de votre chantier : titres de documents, avis, "
@@ -231,13 +243,26 @@ function uneAnalyseExportee(ligne) {
     propositionId: texte(ligne.proposition_id ?? ligne.propositionId),
     analyseLe: texte(ligne.created_at ?? ligne.createdAt),
     /**
-     * **Pourquoi l'analyse manque, quand elle manque.**
+     * **Pourquoi l'analyse manque, et ce que cela ne veut pas dire.**
      *
-     * Une ligne de lecture sans `analyse_gelee` est exactement ce qu'on cherche
-     * quand rien ne s'affiche : la lecture a été enregistrée et n'a rien rendu.
-     * Le dire ici évite de chercher une clé absente dans un objet vide.
+     * La phrase disait « cette ligne de lecture ne porte aucune analyse gelée ».
+     * Elle était exacte et elle a menti : le premier export réel l'a posée sur
+     * **les quinze lignes du chantier**, analyses comprises, et elle s'est lue
+     * « aucune lecture n'a rien rendu » — c'est-à-dire le pire diagnostic
+     * possible, et le faux.
+     *
+     * La vérité est ailleurs : le tableau **ne demande pas** cette colonne. Elle
+     * porte le Markdown entier, et la charger pour trois cents lignes afin d'en
+     * ouvrir une ferait passer trois cents transcriptions sur le réseau — c'est
+     * écrit noir sur blanc dans `LE_SELECT_DUNE_LIGNE`. L'export emporte donc ce
+     * que l'écran a reçu, et l'analyse n'en fait pas partie.
+     *
+     * Ne pas avoir demandé n'est pas avoir reçu vide (règle 5). L'outil fait
+     * pour diagnostiquer est le dernier endroit où l'on peut se permettre de
+     * confondre les deux : il était en train de fabriquer la panne qu'il
+     * cherchait.
      */
-    ...(lecture ? {} : { sansAnalyse: "cette ligne de lecture ne porte aucune analyse gelée" }),
+    ...(lecture ? {} : { sansAnalyse: SANS_ANALYSE_DEMANDEE }),
 
     ceQuOnEnLit: lecture
       ? {

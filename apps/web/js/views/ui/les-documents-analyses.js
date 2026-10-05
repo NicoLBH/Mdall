@@ -26,7 +26,7 @@ import { svgIcon } from "../../ui/icons.js";
 import { renderNavList, renderNavListGroup, renderNavListItem } from "./nav-list.js";
 import { renderProjectRail } from "./project-rail.js";
 import {
-  COLONNE_DU_COMPTE, renderDataTableCount, renderDataTableEmptyState,
+  COLONNE_DU_COMPTE, POUSSE_A_DROITE, renderDataTableCount, renderDataTableEmptyState,
   renderDataTableHead, renderDataTableShell
 } from "./data-table-shell.js";
 import {
@@ -36,7 +36,8 @@ import {
 import { leCompteDit } from "../../services/les-familles-de-document.js";
 import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
 import {
-  LES_TRIS_DES_DOCUMENTS, ceQueLeTriDit, leTriDesDocumentsValide, leTriDit, trierLesDocuments
+  LES_TRIS_DES_DOCUMENTS, SENS, ceQueLeTriDit, leTriDesDocumentsValide, leTriDit,
+  trierLesDocuments
 } from "../../services/le-tri-des-documents.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -205,6 +206,25 @@ export function renderLeTableauDesDocuments({
           }
           : { title: ce.vide.titre, description: ce.vide.quoi }),
         headHtml: renderDataTableHead({
+          /**
+           * **Une seule colonne d'en-tête, et aucun nom de colonne.**
+           *
+           * Il y en avait trois : le compte, puis « État », puis « Ce que la
+           * lecture a valu ». La colonne du compte couvre la grille entière —
+           * c'est ce qui la cale à gauche, au-dessus des titres qu'elle compte
+           * —, et les deux noms tombaient donc sur une **seconde ligne**, sous
+           * le compte et décalés des colonnes qu'ils prétendaient nommer. Une
+           * en-tête qui désigne la mauvaise colonne est pire qu'une en-tête
+           * muette.
+           *
+           * Et ils ne nommaient rien qu'on ne lise : un badge « Analysé » dit
+           * son propre nom, « 20 points » aussi. C'est la règle qu'on a déjà
+           * posée pour les Actions — l'en-tête ne nomme plus ses colonnes, elle
+           * compte.
+           *
+           * Reste donc une barre : **ce qui décrit** à gauche — le compte et les
+           * pastilles —, **ce qui agit** à droite — l'ordre.
+           */
           columns: [
             {
               html: `${renderDataTableCount({
@@ -213,9 +233,7 @@ export function renderLeTableauDesDocuments({
                 titre: "Les documents de cette famille"
               })}${renderLesPastillesDuFiltre(comptes, filtre)}${renderLeMenuDuTri(ordre)}`,
               className: COLONNE_DU_COMPTE
-            },
-            "État",
-            "Ce que la lecture a valu"
+            }
           ]
         }),
         bodyHtml: ici.map((un) => renderUnDocumentAnalyse(un, { ouverte, famille })).join("")
@@ -249,17 +267,33 @@ export function renderLeTableauDesDocuments({
  * « Trier » seul obligerait à ouvrir le menu pour savoir comment la liste est
  * rangée. Le bouton porte donc le libellé de l'ordre en cours, qui est aussi la
  * réponse à « pourquoi ce document est-il en haut ? ».
+ *
+ * ## Et son icône dit le sens
+ *
+ * Deux ordres du même axe portent des libellés voisins — « Analysé en dernier »
+ * et « Analysé en premier ». L'icône les sépare d'un coup d'œil : la flèche
+ * descend quand le plus récent est en tête, elle monte quand c'est le plus
+ * ancien.
+ *
+ * ## Quatre entrées, et non deux plus un geste caché
+ *
+ * On aurait pu faire basculer le sens en recliquant l'axe déjà choisi. C'est un
+ * geste qu'aucun écran n'annonce, et qu'on ne trouve qu'en le heurtant par
+ * hasard. Les quatre ordres sont donc écrits, chacun avec la question à
+ * laquelle il répond.
  */
 function renderLeMenuDuTri(ordre) {
   const ici = leTriDit(ordre);
 
   return `
-    <div class="issues-head-menu sujets-head-menu">
+    <div class="issues-head-menu sujets-head-menu ${POUSSE_A_DROITE}">
       <button class="issues-head-menu__btn" type="button"
         data-sujets-menu="${LE_MENU_DU_TRI}"
         aria-haspopup="true" aria-expanded="false"
         title="Changer l'ordre du tableau"
-      >${svgIcon("sort-desc", { className: "octicon" })}
+      >${svgIcon(ici.sens === SENS.ANCIEN ? "sort-asc" : "sort-desc", {
+          className: "octicon"
+        })}
         <span>${escapeHtml(ici.libelle)}</span>
         ${svgIcon("chevron-down", { className: "gh-chevron" })}
       </button>

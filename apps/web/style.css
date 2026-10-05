@@ -10420,6 +10420,16 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   grid-column: 1 / -1;
 }
 
+/* Ce qui agit sur le tableau se pousse au bout de la ligne, et ce qui le décrit
+   reste à gauche. Entre les deux, le vide : il dit, sans un mot, que ces deux
+   choses ne sont pas de la même nature.
+
+   `margin-left:auto` plutôt que `justify-content:space-between` sur le parent :
+   l'en-tête porte parfois deux blocs et parfois trois — le compte, les
+   pastilles, l'ordre —, et `space-between` les aurait écartés tous les trois au
+   lieu de n'en détacher qu'un. */
+.data-table-shell__head-pousse{ margin-left:auto; }
+
 .data-table-shell__compte {
   display: inline-flex;
   align-items: center;
@@ -26382,8 +26392,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
      sera extrait puis restitué par le modèle » : elle mangeait la moitié de la
      largeur et coupait les noms exactement là où l'on reconnaît un compte rendu
      de chantier. Le coût s'annonce dans la barre de lancement, pour toute la
-     file et avant le clic. */
-  --data-table-cols:minmax(0, 1fr);
+     file et avant le clic.
+
+     **Deux colonnes, et non une.** L'état de l'analyse suivait le nom ; sur un
+     dossier de rapports dont les noms font cent trente caractères, il était
+     poussé hors de la ligne sur toutes les lignes — et l'on recochait ce qui
+     était déjà analysé. Il a donc sa colonne, toujours au même endroit, comme
+     dans le tableau des analyses. */
+  --data-table-cols:minmax(0, 1fr) 128px;
   flex:1 1 auto; min-height:0; max-height:52vh; overflow:auto;
 }
 /* Ce qui ne se choisit pas reste lisible, et dit pourquoi au survol. Le
@@ -26423,7 +26439,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   display:inline-flex;
   align-items:center;
   gap:4px;
-  margin-left:10px;
   font-size:11.5px;
   white-space:nowrap;
 }

@@ -18,6 +18,15 @@
  * du document — la réunion, l'établissement du rapport —, `lueLe` celle de
  * l'analyse. Rien à inventer, et surtout rien à fondre.
  *
+ * ## Et chacune se lit dans les deux sens
+ *
+ * « Lequel vient d'être lu » et « lequel a été lu il y a le plus longtemps »
+ * sont la même date parcourue à l'envers, et la seconde est celle qu'on pose
+ * quand on cherche ce qui dort : un document lu il y a six mois par un procédé
+ * qu'on a changé depuis. Les deux axes se parcourent donc dans les deux sens,
+ * ce qui fait quatre ordres — tous dérivés des deux axes, et aucun écrit deux
+ * fois.
+ *
  * ## Un document sans date ne se range pas au hasard
  *
  * C'est la même règle que `tri-des-sujets.js`, et elle vaut doublement ici :
@@ -39,42 +48,106 @@
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Les ordres possibles. `ANALYSE` est celui d'origine : le plus récemment lu. */
+/**
+ * Les deux axes de rangement. Ce ne sont **pas** les ordres : un axe se parcourt
+ * dans les deux sens, et c'est le sens qui fait l'ordre.
+ */
 export const TRI_DES_DOCUMENTS = {
   ANALYSE: "analyse",
   DOCUMENT: "document"
 };
 
 /**
- * Les ordres offerts, et ce que chacun répond.
+ * Les deux sens.
  *
- * `ANALYSE` d'abord, parce que c'est l'ordre d'arrivée : celui sur lequel on
- * atterrit, et celui qu'on veut pendant un essai.
+ * ## Pourquoi les deux, et nommés par ce qu'ils mettent en tête
+ *
+ * « Croissant » et « décroissant » demandent de savoir croissant **de quoi** :
+ * d'une date, et une date croissante met le plus ancien devant. On le relit
+ * deux fois à chaque clic. Nommés par ce qui arrive en tête — le plus récent,
+ * le plus ancien —, il n'y a plus rien à retourner dans sa tête.
  */
-export const LES_TRIS_DES_DOCUMENTS = [
+export const SENS = { RECENT: "recent", ANCIEN: "ancien" };
+
+/**
+ * Ce que chaque axe range, et ce qu'il répond dans chaque sens.
+ *
+ * **Les quatre ordres se dérivent d'ici**, et ne sont pas écrits à la main :
+ * quatre entrées recopiées, c'est un libellé qu'on corrige d'un côté et pas de
+ * l'autre, et un champ qui finit par ne plus désigner la même date (règle 10).
+ */
+const LES_AXES = [
   {
-    cle: TRI_DES_DOCUMENTS.ANALYSE,
-    libelle: "Analysé en dernier",
-    question: "Lequel vient d'être lu ?",
-    champ: "lueLe"
+    axe: TRI_DES_DOCUMENTS.ANALYSE,
+    champ: "lueLe",
+    dit: {
+      [SENS.RECENT]: {
+        libelle: "Analysé en dernier",
+        question: "Lequel vient d'être lu ?"
+      },
+      [SENS.ANCIEN]: {
+        libelle: "Analysé en premier",
+        question: "Lequel a été lu il y a le plus longtemps ?"
+      }
+    }
   },
   {
-    cle: TRI_DES_DOCUMENTS.DOCUMENT,
-    libelle: "Date du document",
-    question: "Lequel est le plus récent sur le chantier ?",
-    champ: "quand"
+    axe: TRI_DES_DOCUMENTS.DOCUMENT,
+    champ: "quand",
+    dit: {
+      [SENS.RECENT]: {
+        libelle: "Document le plus récent",
+        question: "Où en est le chantier ?"
+      },
+      [SENS.ANCIEN]: {
+        libelle: "Document le plus ancien",
+        question: "Par quoi le chantier a-t-il commencé ?"
+      }
+    }
   }
 ];
 
-/** L'ordre demandé, ramené à l'un de ceux qui existent. */
+/** La clé d'un ordre : son axe et son sens, séparés. */
+export function laCleDuTri(axe, sens) {
+  return `${texte(axe)}:${texte(sens)}`;
+}
+
+/**
+ * Les quatre ordres offerts, dans l'ordre du menu.
+ *
+ * L'axe de l'analyse d'abord, parce que c'est celui sur lequel on atterrit et
+ * celui qu'on veut pendant un essai : on vient de lancer une lecture, on la
+ * cherche.
+ */
+export const LES_TRIS_DES_DOCUMENTS = LES_AXES.flatMap((un) => (
+  [SENS.RECENT, SENS.ANCIEN].map((sens) => ({
+    cle: laCleDuTri(un.axe, sens),
+    axe: un.axe,
+    sens,
+    champ: un.champ,
+    libelle: un.dit[sens].libelle,
+    question: un.dit[sens].question
+  }))
+));
+
+/** L'ordre d'arrivée : le plus récemment analysé en tête. */
+export const LE_TRI_PAR_DEFAUT = laCleDuTri(TRI_DES_DOCUMENTS.ANALYSE, SENS.RECENT);
+
+/**
+ * L'ordre demandé, ramené à l'un de ceux qui existent.
+ *
+ * **Un ordre inconnu retombe sur celui d'arrivée**, et c'est ce qui permet à un
+ * écran ouvert avant ce changement — qui gardait `"analyse"` sans son sens — de
+ * s'ouvrir sur ce qu'il montrait hier, plutôt que sur un tableau non rangé.
+ */
 export function leTriDesDocumentsValide(tri) {
   const demande = texte(tri);
   return LES_TRIS_DES_DOCUMENTS.some((un) => un.cle === demande)
     ? demande
-    : TRI_DES_DOCUMENTS.ANALYSE;
+    : LE_TRI_PAR_DEFAUT;
 }
 
-/** Un ordre entier — son nom, ce qu'il répond. */
+/** Un ordre entier — son axe, son sens, son nom, ce qu'il répond. */
 export function leTriDit(tri) {
   const cle = leTriDesDocumentsValide(tri);
   return LES_TRIS_DES_DOCUMENTS.find((un) => un.cle === cle);
@@ -107,16 +180,26 @@ export function linstantDuDocument(document, tri) {
  * Les documents sans date restent derrière, dans leur ordre d'origine — le tri
  * de JavaScript est stable, ce qui suffit à le garantir.
  */
-export function trierLesDocuments(documents = [], tri = TRI_DES_DOCUMENTS.ANALYSE) {
+export function trierLesDocuments(documents = [], tri = LE_TRI_PAR_DEFAUT) {
   const tous = Array.isArray(documents) ? documents : [];
+  const ce = leTriDit(tri);
 
   return tous.slice().sort((gauche, droite) => {
     const a = linstantDuDocument(gauche, tri);
     const b = linstantDuDocument(droite, tri);
+    /**
+     * **Un document sans date reste derrière dans les deux sens.**
+     *
+     * On pourrait croire que « le plus ancien d'abord » devrait le mettre en
+     * tête — après tout, il n'a pas de date, donc il pourrait être très vieux.
+     * C'est exactement le raisonnement à ne pas faire : on ne sait pas quand il
+     * date, et le poser en tête d'un ordre chronologique lui invente une place
+     * (règle 5). Il reste derrière, et l'écran dit combien ils sont.
+     */
     if (a === null && b === null) return 0;
     if (a === null) return 1;
     if (b === null) return -1;
-    return b - a;
+    return ce.sens === SENS.ANCIEN ? a - b : b - a;
   });
 }
 
@@ -127,7 +210,7 @@ export function trierLesDocuments(documents = [], tri = TRI_DES_DOCUMENTS.ANALYS
  * trié : la moitié de la liste serait restée en place, et rien n'expliquerait
  * pourquoi.
  */
-export function combienSansLaDate(documents = [], tri = TRI_DES_DOCUMENTS.ANALYSE) {
+export function combienSansLaDate(documents = [], tri = LE_TRI_PAR_DEFAUT) {
   return (Array.isArray(documents) ? documents : [])
     .filter((un) => linstantDuDocument(un, tri) === null).length;
 }
@@ -138,9 +221,9 @@ export function combienSansLaDate(documents = [], tri = TRI_DES_DOCUMENTS.ANALYS
  * `""` quand tout est daté et que l'ordre est celui d'origine : il n'y a alors
  * rien à expliquer, et une phrase qui s'affiche toujours ne se lit jamais.
  */
-export function ceQueLeTriDit(documents = [], tri = TRI_DES_DOCUMENTS.ANALYSE) {
-  const cle = leTriDesDocumentsValide(tri);
-  const sans = combienSansLaDate(documents, cle);
+export function ceQueLeTriDit(documents = [], tri = LE_TRI_PAR_DEFAUT) {
+  const ce = leTriDit(tri);
+  const sans = combienSansLaDate(documents, ce.cle);
   if (!sans) return "";
 
   /**
@@ -151,7 +234,7 @@ export function ceQueLeTriDit(documents = [], tri = TRI_DES_DOCUMENTS.ANALYSE) {
    * écrire côte à côte est la seule façon de ne pas en oublier une.
    */
   const plusieurs = sans > 1;
-  const quoi = cle === TRI_DES_DOCUMENTS.DOCUMENT
+  const quoi = ce.axe === TRI_DES_DOCUMENTS.DOCUMENT
     ? (plusieurs ? "ne portent pas de date de document" : "ne porte pas de date de document")
     : (plusieurs ? "n'ont pas encore été analysés" : "n'a pas encore été analysé");
 

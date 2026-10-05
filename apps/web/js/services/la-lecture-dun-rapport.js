@@ -349,18 +349,31 @@ export function lesRapportsLus(lignes = []) {
     const deja = parDocument.get(cle);
 
     if (!deja) {
+      /**
+       * **La ligne telle que la base la rend, plus ce qu'elle ne porte pas.**
+       *
+       * Elle recopiait chaque champ sous un autre nom : `created_at` devenait
+       * `lueLe`, `document_id` devenait `documentId`, `etabli_le` devenait
+       * `etabliLe`. Les deux autres familles — `lesFilsLus`,
+       * `lesComptesRendusLus` — rendent la ligne telle quelle.
+       *
+       * Ce qui s'est passé est exactement ce que la règle 10 annonce. Le tableau
+       * d'*Analyse de documents* lit les trois familles par **une seule**
+       * fonction, `unDocumentAnalyse`, qui va chercher `created_at`, `lu_par` et
+       * `document_id`. Chez les rapports, ces trois-là n'existaient pas sous ce
+       * nom : elle lisait `undefined` et rendait la chaîne vide. **Sans erreur,
+       * et sans rien pour le dire.** Les quatre rapports du chantier
+       * arrivaient donc sans date d'analyse, sans lecteur et sans document — le
+       * tri ne pouvait pas les ranger, et le choix depuis Fichiers ne pouvait
+       * pas dire qu'ils étaient déjà analysés.
+       *
+       * Ne restent ici que les deux champs que la ligne **ne porte pas** :
+       * `marques`, qui se compte dans la légende, et `combien`, qui se compte
+       * sur les lectures suivantes.
+       */
       parDocument.set(cle, {
-        id: texte(ligne?.id),
-        document: texte(ligne?.document),
-        documentId: texte(ligne?.document_id),
-        numero: texte(ligne?.numero_de_rapport),
-        etabliLe: texte(ligne?.etabli_le),
-        nature: texte(ligne?.nature),
+        ...ligne,
         marques: laLegendeDuRapport(ligne?.legende).length,
-        mesures: ligne?.mesures ?? {},
-        luPar: texte(ligne?.lu_par),
-        propositionId: texte(ligne?.proposition_id),
-        lueLe: texte(ligne?.created_at),
         combien: 1
       });
       continue;
