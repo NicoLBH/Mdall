@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LIRE_LES_RAPPORTS, OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport, renderLesAvisReleves, renderLesEtapesDuRapport, renderLesLecturesAnterieures, renderLesRapportsLus, renderLidentiteDunRapport, renderLinvitationALire
+  LIRE_LES_RAPPORTS, OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport, renderCeQuiACoince, renderLesAvisReleves, renderLesLecturesAnterieures, renderLesRapportsLus, renderLidentiteDunRapport, renderLinvitationALire
 } from "./les-rapports-lus.js";
 
 const LA_LEGENDE = [
@@ -119,44 +119,49 @@ test("la ligne ouverte porte sa marque", () => {
 });
 
 /**
- * **Les trois étapes s'affichent même quand tout est fait.**
+ * **Une lecture qui s'est bien passée n'a rien à raconter.**
  *
- * C'est le procédé qu'on vient juger, pas seulement son résultat.
+ * La section dressait les trois étapes à chaque ouverture, cochées, avec leur
+ * coût et leur raison d'être — trois paragraphes qu'on relit la première fois et
+ * qu'on saute les cent suivantes, posés **avant** ce qu'on vient chercher. Un
+ * encart « tout va bien » est la forme la plus chère du silence (règle 12).
  */
-test("les trois étapes se montrent, avec ce qu'elles font et pourquoi", () => {
-  const html = renderLesEtapesDuRapport(UNE_LECTURE);
+test("une lecture entière ne montre aucun accroc", () => {
+  const html = renderCeQuiACoince(UNE_LECTURE);
 
-  assert.match(html, /Reconnaître la structure et la légende/);
-  assert.match(html, /Transcrire en Markdown/);
-  assert.match(html, /Relever les avis/);
-  // Le pourquoi de la première, qui est le fond de l'affaire.
-  assert.match(html, /« F »/);
-  assert.match(html, /Les trois étapes sont faites/);
-});
-
-/** L'étape en cours se distingue de celle qui est faite. */
-test("l'étape en cours se voit", () => {
-  const html = renderLesEtapesDuRapport({ structure: {} }, { enCours: "markdown" });
-
-  assert.match(html, /est-en-cours/);
-  assert.match(html, /en cours…/);
+  assert.equal(html, "", `une lecture sans accroc écrit quand même : ${html.slice(0, 80)}`);
+  assert.doesNotMatch(html, /Les trois étapes sont faites/);
 });
 
 /**
- * **Une structure non reconnue se dit, et ne se tait pas.**
+ * **Une structure non reconnue, elle, prend toute la place.**
  *
- * Sans cette ligne, on relirait une transcription faite sans squelette en croyant
- * lire une transcription faite avec (règle 5).
+ * Elle change la façon de lire tout ce qui suit : la transcription s'est faite
+ * sans squelette et la légende n'a pas été lue, donc les marques des avis ne se
+ * résolvent pas. Le taire ferait relire une lecture dégradée en la croyant
+ * entière (règle 5).
  */
-test("une structure non reconnue est signalée dans les étapes", () => {
-  const html = renderLesEtapesDuRapport({
-    sansStructure: true, markdown: "x", avis: []
-  });
+test("une structure non reconnue se dit, dans son cadre", () => {
+  const html = renderCeQuiACoince({ sansStructure: true, markdown: "x", avis: [] });
 
-  assert.match(html, /est-sautee/);
-  // `escapeHtml` rend l'apostrophe en `&#39;` : on cherche ce qui s'affiche.
-  assert.match(html, /non reconnue — la suite s&#39;est faite sans elle/);
+  assert.match(html, /rapport-accroc/);
   assert.match(html, /la structure n&#39;a pas été reconnue/);
+  assert.match(html, /la légende n&#39;a pas été lue/);
+});
+
+/** Une étape qui manque se dit aussi : elle explique un vide plus bas. */
+test("une étape qui manque se dit", () => {
+  const html = renderCeQuiACoince({ structure: {} });
+
+  assert.match(html, /rapport-accroc/);
+  assert.match(html, /Il reste à/);
+});
+
+/** Et rien ne lève sur une lecture absente. */
+test("l'accroc tient sur une lecture absente", () => {
+  for (const rien of [null, undefined, {}]) {
+    assert.match(renderCeQuiACoince(rien), /rapport-accroc/);
+  }
 });
 
 /**
@@ -190,6 +195,26 @@ test("une légende absente dit laquelle des deux raisons", () => {
 });
 
 /**
+ * **La légende est encadrée, pleine ou vide.**
+ *
+ * Elle s'écrit à deux endroits — une branche pour la table lue, une pour son
+ * absence — et le cadre se posait sur chacune à la main. L'oublier sur l'une
+ * aurait donné deux présentations du même bloc selon ce que le rapport déclare,
+ * ce qui est exactement ce qu'on ne veut plus recalibrer d'un écran à l'autre
+ * (règle 10). La coquille est commune, on l'éprouve sur les deux branches.
+ */
+test("la légende porte le cadre commun, qu'elle soit lue ou absente", () => {
+  for (const [quoi, lecture] of [
+    ["lue", UNE_LECTURE],
+    ["sans table", { ...UNE_LECTURE, legende: [] }],
+    ["sans structure", { ...UNE_LECTURE, legende: [], sansStructure: true }]
+  ]) {
+    assert.match(renderLaLegendeLue(lecture), /class="rapport-legende rapport-cadre"/,
+      `la légende « ${quoi} » n'a pas le cadre : deux présentations du même bloc`);
+  }
+});
+
+/**
  * **Une marque non déclarée est dite telle quelle, et signalée.**
  *
  * La remplacer par une devinette rendrait un avis faux avec l'aplomb d'un vrai.
@@ -212,16 +237,30 @@ test("des avis non relevés ne se disent pas « aucun avis »", () => {
     /Aucun avis relevé/);
 });
 
-/** L'analyse, dans l'ordre de ce qu'on vient y chercher. */
-test("l'analyse montre les étapes, la légende, puis les avis", () => {
+/**
+ * L'analyse, dans l'ordre de ce qu'on vient y chercher.
+ *
+ * **Les étapes ne sont plus en tête, et ne sont plus là du tout** quand tout
+ * s'est bien passé : la légende ouvre donc l'analyse. L'accroc, lui, passe
+ * devant tout — il change la façon de lire ce qui suit.
+ */
+test("l'analyse montre la légende, puis les avis", () => {
   const html = renderLeDetailDunRapport({ lecture: UNE_LECTURE });
 
-  const ouEtapes = html.indexOf("Reconnaître la structure");
   const ouLegende = html.indexOf("La légende");
   const ouAvis = html.indexOf("Les avis relevés");
 
-  assert.ok(ouEtapes >= 0 && ouEtapes < ouLegende, "les étapes viennent avant la légende");
-  assert.ok(ouLegende < ouAvis, "la légende vient avant les avis");
+  assert.ok(ouLegende >= 0, "la légende manque");
+  assert.ok(ouLegende < ouAvis, "la légende vient après les avis");
+  assert.doesNotMatch(html, /Reconnaître la structure/,
+    "les trois étapes s'affichent encore sur une lecture entière");
+
+  // Et un accroc, lui, passe devant la légende.
+  const casse = renderLeDetailDunRapport({
+    lecture: { ...UNE_LECTURE, sansStructure: true }
+  });
+  assert.ok(casse.indexOf("rapport-accroc") < casse.indexOf("La légende"),
+    "l'accroc ne passe pas devant la légende");
 
   // **La transcription n'est plus là** : elle a son onglet, comme chez les
   // comptes rendus. Repliée en bas d'un `<details>`, elle était le document que
@@ -253,6 +292,53 @@ test("des avis non relevés se disent « non relevés », et non « 0 »", () =>
   const html = renderLidentiteDunRapport({ lecture: { ...UNE_LECTURE, avis: null } });
   assert.match(html, /non relevés/);
   assert.doesNotMatch(html, /<dd>0<\/dd>/);
+});
+
+/**
+ * **Le jour de l'analyse est un fait du document, et non un bandeau.**
+ *
+ * Il occupait trois lignes au-dessus de l'écran — « cette analyse ne se recalcule
+ * pas… » — que l'on relit une fois et saute les cent suivantes. Ce qu'il disait
+ * de juste tient dans un champ, à côté du fichier et des pages.
+ *
+ * **Et il ne se confond pas avec « Émis le »**, qui est la date du rapport et non
+ * celle de sa lecture. Les deux sont dans l'encart, côte à côte : c'est la seule
+ * façon de ne plus les mélanger. Un rapport émis le 18 avril et lu le 2 octobre
+ * doit montrer les deux dates, différentes.
+ */
+test("la date de l'analyse est un fait de l'encart, à côté de l'émission", () => {
+  const html = renderLidentiteDunRapport({ lecture: UNE_LECTURE },
+    { analyseLe: "2026-10-02T09:14:51.000Z" });
+
+  assert.match(html, /Analysé le/);
+  assert.match(html, /<dd>2026-10-02<\/dd>/,
+    "le jour de l'analyse n'est pas rendu, ou il garde son heure");
+  // L'heure n'a rien à dire ici : on compare des jours, pas des minutes.
+  assert.doesNotMatch(html, /09:14/);
+  // Et la date d'émission reste la sienne.
+  assert.match(html, /<dd>2026-03-14<\/dd>/);
+});
+
+/**
+ * **À défaut, le jour où la lecture a été conservée.**
+ *
+ * Une lecture rouverte depuis le tableau n'a pas de `lueLe` sous la main :
+ * l'écran passe ce qu'il a, et c'est la ligne conservée qui porte la date. Sans
+ * ce repli, l'encart aurait eu un champ vide sur toutes les lectures rouvertes —
+ * c'est-à-dire sur le cas le plus courant.
+ */
+test("à défaut, c'est la date de conservation qui dit le jour de l'analyse", () => {
+  const html = renderLidentiteDunRapport({
+    lecture: UNE_LECTURE,
+    conservee: { created_at: "2026-09-30T22:03:00.000Z" }
+  });
+  assert.match(html, /<dd>2026-09-30<\/dd>/);
+});
+
+/** Et sans date du tout, le champ ne paraît pas : un intitulé vide ne dit rien. */
+test("sans date d'analyse, le champ ne paraît pas", () => {
+  const html = renderLidentiteDunRapport({ lecture: UNE_LECTURE });
+  assert.doesNotMatch(html, /Analysé le/);
 });
 
 test("un rapport sans date d'émission dit ce que son absence coûte", () => {

@@ -32,6 +32,10 @@
 import { estUnFichierTexte, nomDuFichier } from "./lire-un-fichier-texte.js";
 import { extensionDe } from "./fichier-a-la-main.js";
 import { FAMILLE, ceQueDitLaFamille } from "./les-familles-de-document.js";
+// **Le vocabulaire des états est celui du tableau des analyses.** Un second
+// ici aurait donné deux écrans qui parlent du même document avec deux mots
+// différents (règle 10).
+import { OU_EN_EST } from "./les-documents-analyses.js";
 import { etatDeLaCaseDeTete } from "./selection-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -173,7 +177,85 @@ export function pourquoiPasChoisissable(document = null, famille = "") {
  * changeait le résultat ici. Un réglage qu'aucune vérification ne justifie se
  * lit comme une précaution, et l'on hésite à y toucher pour rien.
  */
-export function entreesDuDossier(contenu = null, famille = "") {
+/**
+ * Où en est l'analyse d'un document, **vue depuis le dossier qu'on parcourt**.
+ *
+ * ## Pourquoi c'est ici et non dans le tableau des analyses
+ *
+ * Le tableau liste ce qui a une trace : une lecture conservée, ou une ligne de
+ * file. Il ne rencontre donc jamais « jamais analysé » — un document qui n'a
+ * jamais été lancé n'apparaît nulle part.
+ *
+ * Le choix depuis Fichiers, lui, **énumère un dossier** : il voit les trois, et
+ * c'est précisément là qu'on en a besoin. C'est au moment de cocher qu'on veut
+ * savoir ce qui est déjà fait (pour ne pas le repayer), ce qui a échoué (pour le
+ * relancer) et ce qui n'a jamais été lu (pour le lancer).
+ *
+ * ## Les mots viennent du même domaine
+ *
+ * `OU_EN_EST` est celui du tableau. Un second vocabulaire ici aurait donné deux
+ * écrans qui parlent du même document avec deux mots différents (règle 10).
+ *
+ * ## Aucun garde-fou ici, et c'est voulu
+ *
+ * Il y en avait trois, et la batterie de mutations les a retirés un par un sans
+ * faire tomber un test (règle 4) :
+ *
+ *   * `if (!cle) return JAMAIS` et le `if (!cle) continue` de la carte : **une
+ *     entrée sans identifiant ne se liste pas**, c'est le `filter` au bas de
+ *     `entreesDuDossier` qui s'en charge, et son état n'est donc jamais lu ;
+ *   * `connus instanceof Map` : la carte est composée juste au-dessus, par
+ *     `ceQuOnSaitDesDocuments`, et c'en est toujours une. Le test prenait un
+ *     appelant qui n'existe pas.
+ *
+ * Reste le seul repli qui porte quelque chose : **ce que la carte ne nomme pas
+ * n'a jamais été analysé**. C'est la réponse la plus prudente, et la seule qui ne
+ * fasse pas sauter une lecture qu'on n'a pas encore payée.
+ */
+function ouEnEstCeDocument(id = "", connus) {
+  return texte(connus.get(texte(id))?.ou) || OU_EN_EST.JAMAIS;
+}
+
+/**
+ * Ce que l'écran sait de l'état de chaque document, rangé pour être consulté.
+ *
+ * **Ce qui a abouti l'emporte.** Un document relancé après un échec porte les
+ * deux traces ; il est analysé, et le dire « en échec » ferait relancer une
+ * lecture qu'on a déjà payée deux fois (règle 5).
+ *
+ * ## Ce qu'elle attend, et ce qu'elle n'invente pas
+ *
+ * Les documents viennent du tableau des analyses, qui donne toujours un
+ * `documentId` et toujours un `ou`. Il y avait ici deux replis — `|| un.id` et
+ * `|| OU_EN_EST.ANALYSE` — pour des formes que personne ne produit, et un
+ * `if (!cle) continue` qu'aucune consultation ne peut rencontrer. La batterie les
+ * a retirés sans faire tomber un seul test, ce qui était la bonne réponse : un
+ * repli qu'aucun appelant n'emprunte se lit comme une forme admise, et l'on finit
+ * par la croire possible (règle 4).
+ */
+function ceQuOnSaitDesDocuments(documents = null) {
+  const su = new Map();
+
+  for (const un of (Array.isArray(documents) ? documents : [])) {
+    const cle = texte(un?.documentId);
+    const deja = su.get(cle);
+    if (deja?.ou === OU_EN_EST.ANALYSE) continue;
+
+    su.set(cle, { ou: texte(un?.ou), motif: texte(un?.motif), quand: texte(un?.quand) });
+  }
+
+  return su;
+}
+
+/**
+ * @param {object|null} contenu ce que la lecture du dossier a rendu
+ * @param {string} famille la famille qu'on cherche à lire
+ * @param {Array|null} documents **le tableau des analyses**, tel quel.
+ *   Le paramètre acceptait aussi une `Map` déjà rangée ; un paramètre qui prend
+ *   deux formes oblige chaque appelant à choisir, et aucun n'avait de raison de
+ *   choisir la seconde (règle 4). La liste est rangée ici, une fois.
+ */
+export function entreesDuDossier(contenu = null, famille = "", documents = null) {
   // **`null` n'est pas `undefined`.** Une valeur par défaut de déstructuration
   // ne couvre que le second, et la lecture d'un dossier peut très bien rendre
   // `null` : on lèverait alors au lieu d'afficher un dossier vide.
@@ -191,15 +273,29 @@ export function entreesDuDossier(contenu = null, famille = "") {
     .filter((entree) => entree.id)
     .sort(parNom);
 
+  const su = ceQuOnSaitDesDocuments(documents);
+
   const fichiers = (Array.isArray(files) ? files : [])
     .map((fichier) => {
       const pourquoi = pourquoiPasChoisissable(fichier, famille);
+      const id = texte(fichier?.id);
       return {
         type: ENTREE.FICHIER,
-        id: texte(fichier?.id),
+        id,
         nom: nomDuFichier(fichier) || "Document",
         choisissable: !pourquoi,
         pourquoi,
+        /**
+         * **Où en est son analyse**, dit avant qu'on coche.
+         *
+         * C'est ici qu'on décide de dépenser : relancer ce qui est déjà analysé
+         * est un appel payé deux fois, et laisser de côté ce qui a échoué est un
+         * document qu'on croit lu. Ni l'un ni l'autre ne se voyait dans cette
+         * liste — il fallait sortir, aller au tableau, et revenir.
+         */
+        ou: ouEnEstCeDocument(id, su),
+        /** Pourquoi la lecture n'a pas abouti, quand elle a échoué. */
+        motif: texte(su.get(id)?.motif),
         // **Comment il se lira**, dit avant qu'on clique : un PDF coûtera un
         // appel, un texte non. Le découvrir après coup, sur une facture, n'est
         // pas une façon de décider (fondamental 13).

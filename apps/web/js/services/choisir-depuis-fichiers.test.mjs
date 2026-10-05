@@ -4,12 +4,9 @@ import test from "node:test";
 
 import { FAMILLE, TOUTES } from "./les-familles-de-document.js";
 import {
-  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, PHRASES_DU_REFUS,
-  basculerLeChoix,
-  ceQueLaFileContient, cheminDuDossier, commentCaSeLit, entreesDuDossier,
-  etatDeLaCaseDuDossier, lesChoisissables, phraseDeCeQueLaFileFera, phraseDeLaSelection,
-  phraseDuDossier, pourquoiPasChoisissable, toutBasculer
+  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, PHRASES_DU_REFUS, basculerLeChoix, ceQueLaFileContient, cheminDuDossier, commentCaSeLit, entreesDuDossier, etatDeLaCaseDuDossier, lesChoisissables, phraseDeCeQueLaFileFera, phraseDeLaSelection, phraseDuDossier, pourquoiPasChoisissable, toutBasculer
 } from "./choisir-depuis-fichiers.js";
+import { OU_EN_EST } from "./les-documents-analyses.js";
 
 const range = (nom, surcharge = {}) => ({
   id: nom, name: nom, storage_bucket: "documents", storage_path: `p/${nom}`, ...surcharge
@@ -438,4 +435,129 @@ test("ce que la file fera se dit avant : une proposition par compte rendu", () =
   const seule = phraseDeCeQueLaFileFera(ceQueLaFileContient(new Set(["d1"]), TROIS));
   assert.match(seule, /une proposition à signer/);
   assert.doesNotMatch(seule, /1 lectures/);
+});
+
+/* ── Où en est l'analyse de chaque document ──────────────────────────────── */
+
+/**
+ * **On cochait à l'aveugle.**
+ *
+ * Pour savoir si un compte rendu avait déjà été lu, il fallait fermer le choix,
+ * aller au tableau, chercher la ligne, revenir. Trois conséquences, et chacune
+ * coûte : on relance une lecture déjà payée, on laisse de côté une lecture qui a
+ * **échoué** en la croyant faite, et l'on ne voit pas ce qui n'a jamais été lu —
+ * c'est-à-dire ce qu'on est venu lancer.
+ */
+/**
+ * Où en est le fichier `a`, quand le tableau dit `documents` de lui.
+ *
+ * `entreesDuDossier` est la seule porte : la composition de la carte et sa
+ * consultation sont désormais internes, parce qu'aucun écran n'avait de raison
+ * de les appeler séparément (règle 4). Elles s'éprouvent donc par là, ce qui est
+ * aussi la façon dont l'application les emploie.
+ */
+function ouEnEst(documents, id = "a") {
+  const entrees = entreesDuDossier({ files: [
+    { id, original_filename: "CR.pdf", storage_bucket: "d", storage_path: `p/${id}` }
+  ] }, FAMILLE.CR, documents);
+  return entrees[0].ou;
+}
+
+test("chaque entrée dit où en est son analyse", () => {
+  const su = [
+    { documentId: "a", ou: OU_EN_EST.ANALYSE },
+    { documentId: "b", ou: OU_EN_EST.ECHOUE, motif: "ce document ne porte aucun texte" },
+    { documentId: "c", ou: OU_EN_EST.ATTENTE }
+  ];
+
+  const entrees = entreesDuDossier({ files: [
+    { id: "a", original_filename: "CR_16.pdf", storage_bucket: "d", storage_path: "p/a" },
+    { id: "b", original_filename: "CR_17.pdf", storage_bucket: "d", storage_path: "p/b" },
+    { id: "c", original_filename: "CR_18.pdf", storage_bucket: "d", storage_path: "p/c" },
+    { id: "z", original_filename: "CR_19.pdf", storage_bucket: "d", storage_path: "p/z" }
+  ] }, FAMILLE.CR, su);
+
+  const par = new Map(entrees.map((une) => [une.id, une]));
+  assert.equal(par.get("a").ou, OU_EN_EST.ANALYSE);
+  assert.equal(par.get("b").ou, OU_EN_EST.ECHOUE);
+  assert.equal(par.get("c").ou, OU_EN_EST.ATTENTE);
+
+  /**
+   * **Celui qu'on n'a jamais lancé est le cas ordinaire**, et il se dit quand
+   * même : c'est l'absence des deux autres, et seul un écran qui énumère un
+   * dossier peut la constater. Le tableau des analyses ne le rencontre jamais.
+   */
+  assert.equal(par.get("z").ou, OU_EN_EST.JAMAIS);
+
+  // Et le motif de l'échec voyage : c'est lui qui dit s'il faut relancer ou non.
+  assert.equal(par.get("b").motif, "ce document ne porte aucun texte");
+  assert.equal(par.get("z").motif, "");
+});
+
+/**
+ * **Ce qui a abouti l'emporte.**
+ *
+ * Un document relancé après un échec porte les deux traces. Il est analysé, et
+ * le dire « en échec » ferait relancer une lecture qu'on a déjà payée deux fois
+ * (règle 5).
+ */
+test("un document relancé après un échec est analysé, et non en échec", () => {
+  assert.equal(ouEnEst([
+    { documentId: "a", ou: OU_EN_EST.ECHOUE, motif: "le fichier est illisible" },
+    { documentId: "a", ou: OU_EN_EST.ANALYSE }
+  ]), OU_EN_EST.ANALYSE);
+
+  // Et dans l'autre ordre aussi : c'est l'aboutissement qui tranche, pas le rang.
+  assert.equal(ouEnEst([
+    { documentId: "a", ou: OU_EN_EST.ANALYSE },
+    { documentId: "a", ou: OU_EN_EST.ECHOUE, motif: "le fichier est illisible" }
+  ]), OU_EN_EST.ANALYSE);
+});
+
+/**
+ * **Le dernier vu l'emporte, à égalité d'aboutissement.**
+ *
+ * Deux échecs sur le même document : c'est le second qu'on veut voir, parce que
+ * c'est lui qui dit pourquoi la dernière tentative s'est arrêtée. Le motif de la
+ * première ferait chercher une cause déjà corrigée.
+ */
+test("entre deux échecs, c'est le motif du dernier qui se lit", () => {
+  const entrees = entreesDuDossier({ files: [
+    { id: "a", original_filename: "CR.pdf", storage_bucket: "d", storage_path: "p/a" }
+  ] }, FAMILLE.CR, [
+    { documentId: "a", ou: OU_EN_EST.ECHOUE, motif: "le modèle n'a pas répondu" },
+    { documentId: "a", ou: OU_EN_EST.ECHOUE, motif: "le fichier ne porte aucun texte" }
+  ]);
+  assert.equal(entrees[0].motif, "le fichier ne porte aucun texte");
+});
+
+/** Sans rien de su, tout est « jamais » — et non « analysé » par défaut. */
+test("sans rien de su, aucun document n'est réputé analysé", () => {
+  for (const rien of [null, undefined, [], {}, "deux documents"]) {
+    assert.equal(ouEnEst(rien), OU_EN_EST.JAMAIS,
+      "un document inconnu est réputé analysé : on ne le relancerait jamais");
+  }
+});
+
+/**
+ * **Ce que le tableau ne nomme pas n'a pas d'état inventé.**
+ *
+ * Les documents arrivent du tableau des analyses, qui donne toujours un `ou`.
+ * Prêter « analysé » par défaut à une ligne qui n'en porte pas ferait passer pour
+ * lue une lecture dont on ne sait rien.
+ */
+test("une ligne sans état ne vaut pas « analysé »", () => {
+  assert.notEqual(ouEnEst([{ documentId: "a" }]), OU_EN_EST.ANALYSE);
+});
+
+/** Un dossier n'a pas d'analyse : lui en prêter une n'aurait aucun sens. */
+test("un dossier ne porte pas d'état d'analyse", () => {
+  const entrees = entreesDuDossier({
+    folders: [{ id: "f-1", name: "Comptes rendus" }],
+    files: []
+  }, FAMILLE.CR, [{ documentId: "f-1", ou: OU_EN_EST.ANALYSE }]);
+
+  assert.equal(entrees[0].type, ENTREE.DOSSIER);
+  assert.equal(entrees[0].ou, undefined,
+    "un dossier porte un état d'analyse : on croirait pouvoir l'ouvrir");
 });

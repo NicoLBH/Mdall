@@ -32,6 +32,11 @@ import {
   CE_QUE_CA_DEMANDE, ENTREE, PHRASES_DU_REFUS, ceQueLaFileContient, cheminDuDossier,
   etatDeLaCaseDuDossier, phraseDeCeQueLaFileFera, phraseDeLaSelection, phraseDuDossier
 } from "../../services/choisir-depuis-fichiers.js";
+// Les mots des états viennent du tableau des analyses : deux écrans qui parlent
+// du même document avec deux mots différents finiraient par se contredire.
+import { CE_QUE_DIT_LETAT_DUN, OU_EN_EST } from "../../services/les-documents-analyses.js";
+
+const texte = (valeur) => String(valeur ?? "").trim();
 /**
  * **La file ne se dessine plus ici.**
  *
@@ -118,10 +123,66 @@ function renderUneEntree(entree, choisis = null) {
           ? `<button type="button" class="choisir-fichier__nom" ${marque}
                ${dit ? `title="${escapeHtml(dit)}"` : ""}>${escapeHtml(entree.nom)}</button>`
           : `<span class="documents-repo__name">${escapeHtml(entree.nom)}</span>`}
+        ${renderOuEnEst(entree)}
         ${refus ? `<span class="choisir-fichier__refus mono-small">${escapeHtml(refus)}</span>` : ""}
       </div>
     </div>
   `;
+}
+
+/**
+ * Où en est l'analyse de ce document — **à côté de son nom, avant le clic**.
+ *
+ * ## Le défaut que cela ferme
+ *
+ * On cochait à l'aveugle. Pour savoir si un compte rendu avait déjà été lu, il
+ * fallait fermer le choix, aller au tableau, chercher la ligne, revenir. Trois
+ * conséquences, et chacune coûte : on relance une lecture déjà payée, on laisse
+ * de côté une lecture qui a **échoué** en la croyant faite, et l'on ne voit pas
+ * ce qui n'a jamais été lu — c'est-à-dire ce qu'on est venu lancer.
+ *
+ * ## Rien sur ce qui n'a jamais été analysé
+ *
+ * C'est le cas ordinaire dans un dossier qu'on ouvre pour la première fois : un
+ * badge sur chaque ligne n'apprendrait rien et cacherait les trois qui comptent.
+ * Le silence est donc l'état neutre, et le badge l'exception — l'inverse de la
+ * règle habituelle, parce qu'ici c'est **l'absence d'analyse** qui est la norme.
+ *
+ * ## Un seul test, et non trois
+ *
+ * Il y avait `if (!ou || ou === JAMAIS) return ""` avant la table, puis
+ * `if (!ce) return ""` après. Les deux premiers cas tombent déjà dans le
+ * troisième, puisque ni la chaîne vide ni `jamais` n'ont de clé — la batterie de
+ * mutations les a retirés sans faire tomber un test (règle 4). Ne reste que le
+ * manque dans la table, qui est le vrai énoncé : **ce qui n'y figure pas ne
+ * s'écrit pas**, et c'est ce qui fait qu'un état que le serveur nommerait demain
+ * se tait au lieu de casser l'écran.
+ */
+function renderOuEnEst(entree) {
+  const ou = texte(entree?.ou);
+
+  const ce = {
+    [OU_EN_EST.ANALYSE]: {
+      ton: "analyse", icone: "check-circle",
+      pourquoi: "Ce document a déjà été analysé. Le relire est un nouvel appel, "
+        + "et une nouvelle facture."
+    },
+    [OU_EN_EST.ATTENTE]: {
+      ton: "attente", icone: "history",
+      pourquoi: "Sa lecture a été lancée et n'est pas revenue. La relancer "
+        + "maintenant en ferait deux."
+    },
+    [OU_EN_EST.ECHOUE]: {
+      ton: "echoue", icone: "alert",
+      pourquoi: "Sa lecture s'est arrêtée : rien ne la reprendra sans un geste."
+    }
+  }[ou];
+  if (!ce) return "";
+
+  return `<span class="choisir-fichier__etat choisir-fichier__etat--${ce.ton}"
+    title="${escapeHtml(texte(entree?.motif) || ce.pourquoi)}"
+  >${svgIcon(ce.icone, { className: "octicon" })}${
+    escapeHtml(CE_QUE_DIT_LETAT_DUN[ou])}</span>`;
 }
 
 /**

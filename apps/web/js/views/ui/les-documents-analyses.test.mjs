@@ -160,19 +160,25 @@ test("la ligne ouverte est marquée", () => {
 
 /* ── Les deux états, à l'écran ─────────────────────────────────── */
 
-test("chaque ligne porte un badge, et il dit lequel des deux états", () => {
+test("chaque ligne porte un badge, et il dit lequel des trois états", () => {
   // Le badge est ce qu'on lit **avant** de parcourir la ligne, au moment où l'on
-  // décide de cliquer ou non. Un badge qui dirait la même chose des deux états
+  // décide de cliquer ou non. Un badge qui dirait la même chose de deux états
   // ferait croire qu'une lecture partie est déjà revenue (règle 5).
   const html = renderLeTableauDesDocuments({ documents: MELANGE, famille: TOUTES });
 
   // Le mot de la pastille, lui, est suivi de son compte : seuls les badges
   // referment leur `span` juste après le mot.
-  assert.equal((html.match(/En attente<\/span>/g) ?? []).length, 3, "trois en attente");
+  assert.equal((html.match(/En attente<\/span>/g) ?? []).length, 2, "deux en attente");
+  assert.equal((html.match(/En échec<\/span>/g) ?? []).length, 1, "un en échec");
   assert.equal((html.match(/Analysé<\/span>/g) ?? []).length, 3, "trois analysés");
 
   assert.match(html, /documents-analyses__badge--attente/);
   assert.match(html, /documents-analyses__badge--analyse"/);
+  /**
+   * **Un échec a son propre ton.** Il ne demande pas la même chose qu'une
+   * attente : l'une n'a besoin de rien, l'autre ne reviendra jamais toute seule.
+   */
+  assert.match(html, /documents-analyses__badge--echoue/);
   // Et ce qui attend se dit sur sa ligne : ce que la file en sait.
   assert.match(html, /lecture en cours/);
   assert.match(html, /le fichier est illisible/);
@@ -196,19 +202,19 @@ test("les pastilles comptent la famille ouverte, et non le chantier entier", () 
   // rendrait trois, et le compte passerait pour faux.
   assert.deepEqual(
     lesPastillesDisent(renderLeTableauDesDocuments({ documents: MELANGE, famille: TOUTES })),
-    { "En attente": 3, "Analysés": 3 }
+    { "En échec": 1, "En attente": 2, "Analysés": 3 }
   );
   assert.deepEqual(
     lesPastillesDisent(renderLeTableauDesDocuments({
       documents: MELANGE, famille: FAMILLE.CONTROLE
     })),
-    { "En attente": 2, "Analysés": 1 }
+    { "En échec": 1, "En attente": 1, "Analysés": 1 }
   );
   assert.deepEqual(
     lesPastillesDisent(renderLeTableauDesDocuments({
       documents: MELANGE, famille: FAMILLE.CR
     })),
-    { "En attente": 0, "Analysés": 1 }
+    { "En échec": 0, "En attente": 0, "Analysés": 1 }
   );
 });
 
@@ -216,7 +222,8 @@ test("un état sans document garde sa pastille", () => {
   // « En attente (0) » est une réponse : rien n'est en cours. La faire
   // disparaître laisserait se demander si le filtre existe encore.
   const html = renderLeTableauDesDocuments({ documents: TOUS, famille: TOUTES });
-  assert.deepEqual(lesPastillesDisent(html), { "En attente": 0, "Analysés": 3 });
+  assert.deepEqual(lesPastillesDisent(html),
+    { "En échec": 0, "En attente": 0, "Analysés": 3 });
 });
 
 test("le filtre ne montre qu'un état", () => {
@@ -232,6 +239,19 @@ test("le filtre ne montre qu'un état", () => {
   });
   assert.match(analyses, /RICT-03\.pdf/);
   assert.doesNotMatch(analyses, /RICT-04\.pdf/);
+
+  /**
+   * **Et le filtre des échecs ne montre que ce qui s'est arrêté.**
+   *
+   * C'est le seul des trois sur lequel on peut agir tout de suite : relancer.
+   * Noyé dans « en attente », il n'avait pas de chemin à lui.
+   */
+  const echecs = renderLeTableauDesDocuments({
+    documents: MELANGE, famille: TOUTES, filtre: OU_EN_EST.ECHOUE
+  });
+  assert.match(echecs, /RICT-05\.pdf/);
+  assert.doesNotMatch(echecs, /RICT-04\.pdf/, "une lecture en cours est rangée en échec");
+  assert.doesNotMatch(echecs, /RICT-03\.pdf/);
 });
 
 test("une pastille allumée se rééteint au clic", () => {
@@ -239,13 +259,13 @@ test("une pastille allumée se rééteint au clic", () => {
   // l'on chercherait un bouton qui n'existe pas.
   assert.deepEqual(
     lesPastillesEmettent(renderLeTableauDesDocuments({ documents: MELANGE })),
-    [OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE]
+    [OU_EN_EST.ECHOUE, OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE]
   );
   assert.deepEqual(
     lesPastillesEmettent(renderLeTableauDesDocuments({
       documents: MELANGE, filtre: OU_EN_EST.ATTENTE
     })),
-    ["", OU_EN_EST.ANALYSE]
+    [OU_EN_EST.ECHOUE, "", OU_EN_EST.ANALYSE]
   );
   assert.match(renderLeTableauDesDocuments({
     documents: MELANGE, filtre: OU_EN_EST.ANALYSE

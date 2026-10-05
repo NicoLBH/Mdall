@@ -542,6 +542,68 @@ rouvre son analyse » redisait le compte que l'en-tête porte déjà, et expliqu
 geste qu'on fait sans qu'on le dise. Ce qui comptait — combien, et dans quel
 état — est passé dans les pastilles.
 
+### Quatre états, et « en échec » en est un
+
+`OU_EN_EST` en portait deux, puis trois, et en porte quatre :
+
+| état | ce qui l'a produit | le geste qu'il appelle |
+| --- | --- | --- |
+| `analyse` | une lecture conservée | l'ouvrir |
+| `attente` | un pas de file `attend` ou `en-cours` | attendre |
+| `echoue` | un pas de file `echec` | relancer |
+| `jamais` | **l'absence des trois autres** | lancer |
+
+**`echoue` était fondu dans `attente`**, et les deux n'appellent pas le même
+geste : une lecture qui attend n'a besoin de rien, une lecture qui a échoué ne
+reviendra jamais toute seule. Fondus, le second se cachait derrière le premier —
+on regardait « 3 en attente » en croyant que le serveur y travaillait.
+
+**`jamais` ne se déduit d'aucune table.** Le tableau ne liste que ce qui a une
+trace, et un document jamais lancé n'en a aucune : le tableau ne le rencontre donc
+jamais, et sa pastille n'existe pas. C'est le choix depuis Fichiers qui le
+rencontre, parce que lui **énumère un dossier**. Les comptes des pastilles sont
+dérivés de `OU_EN_EST` moins `jamais`, et non écrits un par un : un état ajouté
+en haut et oublié en bas ferait une pastille qui ne compte rien, et l'on croirait
+qu'il n'y a rien à compter (règle 10).
+
+## Choisir depuis Fichiers sans cocher à l'aveugle
+
+On cochait sans savoir. Pour apprendre si un compte rendu avait déjà été lu, il
+fallait fermer le choix, aller au tableau, chercher la ligne, revenir. Trois
+conséquences, et chacune coûte :
+
+- on **relance une lecture déjà payée** — un appel, une facture ;
+- on **laisse de côté une lecture qui a échoué** en la croyant faite ;
+- on **ne voit pas ce qui n'a jamais été lu**, c'est-à-dire ce qu'on est venu
+  lancer.
+
+Chaque ligne porte donc, à côté de son nom, où en est son analyse : « déjà
+analysé », « lecture en cours », « la lecture a échoué ». L'infobulle dit ce que
+ça coûterait de relancer, et sur un échec c'est le **motif réel** qui s'y
+affiche — c'est lui qui dit s'il faut relancer ou corriger d'abord.
+
+**Rien sur ce qui n'a jamais été analysé.** C'est le cas ordinaire dans un dossier
+qu'on ouvre pour la première fois : un badge sur chaque ligne n'apprendrait rien
+et noierait les trois qui comptent. Le silence est donc l'état neutre et le badge
+l'exception — l'inverse de la règle habituelle, parce qu'ici c'est l'absence
+d'analyse qui est la norme.
+
+**Ce qui a abouti l'emporte.** Un document relancé après un échec porte les deux
+traces ; il est analysé, et le dire « en échec » ferait repayer une lecture faite
+(règle 5). Entre deux échecs, en revanche, c'est le **dernier** motif qui se lit :
+celui de la première tentative ferait chercher une cause déjà corrigée.
+
+**Et rien de chargé n'est pas « rien d'analysé ».** Avant que les listes du
+tableau soient revenues, l'écran ne sait rien : prétendre « jamais analysé » de
+tout serait une réponse. Il ne dit donc rien, ce que fait l'absence de badge.
+
+**L'information ne coûte pas un aller-retour.** Les lectures conservées et les
+lignes de file sont déjà chargées pour le tableau, juste derrière cette liste :
+c'est la même liste qui voyage, pas une seconde composition (règle 4). Le
+branchement s'appelle `lesEntreesDuChoix`, et il est nommé pour être éprouvé — il
+vivait au milieu du gestionnaire, entre un `await import` et un `try`, où rien ne
+pouvait le casser exprès.
+
 ### Où se décide ce qu'on lit de la file
 
 `lesStatutsALire({ dontLesEchecs })`, dans `reveiller-la-file.js`, qui est pur et
