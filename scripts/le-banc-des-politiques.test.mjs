@@ -150,6 +150,9 @@ const LES_MIGRATIONS = [
   // porte une dépense — une batterie, c'est une quarantaine d'appels au modèle
   // — et sa porte est donc exactement ce qu'il faut essayer de forcer.
   "202611270001_les_mesures_demandees.sql",
+  // Une mesure avance par morceaux : la batterie relit quatorze fois, à trois
+  // appels chacune, et aucune fonction de bord ne vit aussi longtemps.
+  "202611280001_une_mesure_avance_par_morceaux.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",

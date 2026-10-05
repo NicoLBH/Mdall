@@ -28,15 +28,15 @@
  */
 
 import { leCorpus } from "./la-batterie-des-perturbations/le-corpus.js";
-import { LES_PERTURBATIONS } from "./la-batterie-des-perturbations/les-perturbations.js";
-import { VERDICT } from "./la-batterie-des-perturbations/la-relation.js";
-import { passerLaBatterie } from "./la-batterie-des-perturbations/passer-la-batterie.js";
+import { LES_PERTURBATIONS } from "../apps/web/js/services/les-perturbations.js";
+import { VERDICT } from "../apps/web/js/services/la-relation.js";
+import { passerLaBatterie } from "../apps/web/js/services/passer-la-batterie.js";
 import {
   unLecteurFidele, unLecteurQuiDevine
 } from "./la-batterie-des-perturbations/un-lecteur-de-carton.js";
 import {
   parLeReseau, unLecteurDuServeur
-} from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
+} from "../apps/web/js/services/un-lecteur-du-serveur.js";
 import {
   MESURE, deposerUnBilan, direLeDepot, ouDeposer
 } from "../apps/web/js/services/le-depot-dun-bilan.js";

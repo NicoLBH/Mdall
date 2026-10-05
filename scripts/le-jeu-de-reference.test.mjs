@@ -19,12 +19,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  DOU_VIENT_UNE_ANNOTATION, leJeuDeReference, uneAnnotation
-} from "./le-jeu-de-reference/lannotation.js";
+  DOU_VIENT_UNE_ANNOTATION, uneAnnotation
+} from "../apps/web/js/services/lannotation.js";
+import { leJeuDeReference } from "./le-jeu-de-reference/le-jeu-du-disque.js";
 import {
   ETAPE, confronter, laPart, leBilanDuJeu
-} from "./le-jeu-de-reference/la-confrontation.js";
-import { POURQUOI_PAS, passerLeJeu } from "./le-jeu-de-reference/passer-le-jeu.js";
+} from "../apps/web/js/services/la-confrontation.js";
+import { POURQUOI_PAS, passerLeJeu } from "../apps/web/js/services/passer-le-jeu.js";
 import { OU_EST_LE_CORPUS, leCorpus } from "./la-batterie-des-perturbations/le-corpus.js";
 import {
   unLecteurFidele, unLecteurQuiDevine

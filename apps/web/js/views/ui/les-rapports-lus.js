@@ -550,25 +550,44 @@ export function renderLeDetailDunRapport(vue = null, { onglet = "analyse" } = {}
    * charger pour montrer ce qu'il montre.
    */
   if (onglet === "mdall") {
-    const { versables } = avisDuRapport({
+    const { versables, ditDesAvisSansCouple } = avisDuRapport({
       avis: liste(lecture.avis),
       assertions: [],
       emisPar: texte(lecture?.emisPar) || texte(lecture?.emetteur?.nom),
       rapport: texte(lecture?.nom) || texte(lecture?.titre),
       documentId: texte(vue?.conservee?.documentId),
-      le: texte(lecture?.le)
+      le: texte(lecture?.le),
+      /**
+       * **La légende du rapport**, qui est l'autorité sur ses propres marques.
+       * Sans elle, un avis marqué `S` restait « sans teneur lisible » — et un
+       * rapport final n'en déclare aucune, parce qu'il n'y relève que ce qui ne
+       * va pas.
+       */
+      legende: lecture?.legende ?? null
     });
+
+    /**
+     * **Ce qui n'est pas proposé se dit, avant le reste.**
+     *
+     * Mieux vaut ne rien verser que de saturer la mémoire de bruit — mais un
+     * avis écarté en silence ferait croire que le rapport n'en porte que douze
+     * alors qu'il en porte vingt, et l'on ne chercherait jamais les huit autres
+     * (règle 5).
+     */
+    const laisses = ditDesAvisSansCouple
+      ? `<p class="review-empty-note">${escapeHtml(ditDesAvisSansCouple)}</p>`
+      : "";
 
     const blocs = blocsAProposer(versables, {});
     if (!blocs.length) {
-      return `<p class="review-empty-note">${escapeHtml(
+      return `${laisses}<p class="review-empty-note">${escapeHtml(
         "Ce rapport n'a produit aucun avis transcriptible : il n'y a rien que la "
         + "mémoire écrirait. Ce n'est pas « le rapport est vide » — l'onglet "
         + "Analyse dit ce qui a été relevé, et ce que la porte a jeté."
       )}</p>`;
     }
 
-    return `<div class="rapport-detail">${renderMdallAProposer(blocs, {
+    return `${laisses}<div class="rapport-detail">${renderMdallAProposer(blocs, {
       titre: "Ce que nous avons compris de ce rapport",
       quoi: SOUS_LE_TITRE.A_PROPOSER
     })}</div>`;

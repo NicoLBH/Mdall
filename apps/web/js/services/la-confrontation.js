@@ -27,8 +27,8 @@
  * positifs.
  */
 
-import { lempreinteDuneLecture } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
-import { laCleDunReleve } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
+import { lempreinteDuneLecture } from "./lempreinte-dune-lecture.js";
+import { laCleDunReleve } from "./lempreinte-dune-lecture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);

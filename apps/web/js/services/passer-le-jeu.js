@@ -18,7 +18,6 @@
  */
 
 import { confronter, leBilanDuJeu } from "./la-confrontation.js";
-import { leJeuDeReference } from "./lannotation.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -31,11 +30,19 @@ export const POURQUOI_PAS = {
 };
 
 /**
+ * **Le jeu se passe en paramètre, et n'a plus de défaut lu du disque.**
+ *
+ * Il valait `leJeuDeReference()`, qui lit un dossier. Deno n'a pas ce
+ * dossier — et un défaut qui lève à l'import rendait ce module inimportable au
+ * serveur, donc le jeu de référence inlançable depuis la console. L'appelant
+ * dit maintenant d'où viennent ses annotations : du disque en ligne de
+ * commande, du corpus descendu au serveur.
+ *
  * @param {object} options
  * @param {Array} options.jeu les annotations
  * @param {function} options.lire `async ({document, famille}) => {ok, lecture}|{ok:false, motif}`
  */
-export async function passerLeJeu({ jeu = leJeuDeReference(), lire = null } = {}) {
+export async function passerLeJeu({ jeu = [], lire = null } = {}) {
   const confrontations = [];
   const nonPassees = [];
 

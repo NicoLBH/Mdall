@@ -93,7 +93,11 @@ export function avisDuLot({ sources = [], avis = [], assertions = [] } = {}) {
       rapport: nomDuDocument(source),
       documentId: sourceId,
       le: texte(source?.issued_at),
-      pages: Array.isArray(source?.pages) ? source.pages : []
+      pages: Array.isArray(source?.pages) ? source.pages : [],
+      // La légende du rapport, quand la source la porte : elle est l'autorité
+      // sur ses propres marques, et sans elle la teneur retombe sur le
+      // vocabulaire du métier.
+      legende: source?.legende ?? null
     });
 
     // Ce qui est déjà en mémoire au même sujet et à la même teneur sort ici, et

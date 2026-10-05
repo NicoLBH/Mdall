@@ -32,27 +32,27 @@ import { join } from "node:path";
 import {
   LES_MARQUES_OPPOSEES, LES_PERTURBATIONS, LA_COUPURE, RELATION,
   laDateEnToutesLettres, lesCellules, lesLignesDeTableau
-} from "./la-batterie-des-perturbations/les-perturbations.js";
+} from "../apps/web/js/services/les-perturbations.js";
 import {
   LES_FAMILLES_PROJETEES, combienDeReleves, laCleDunReleve, lempreinteDuneLecture
 } from "../apps/web/js/services/lempreinte-dune-lecture.js";
 import {
   VERDICT, laRelationTient
-} from "./la-batterie-des-perturbations/la-relation.js";
+} from "../apps/web/js/services/la-relation.js";
 import { ceQuiSepare } from "../apps/web/js/services/ce-qui-separe.js";
 import {
   lesCitationsSeRetrouvent, lesMarquesSontDeclarees, pourChercherUneCitation
 } from "../apps/web/js/services/les-invariants-dune-lecture.js";
 import {
   POURQUOI_PAS, leBilan, passerLaBatterie, passerUneEpreuve
-} from "./la-batterie-des-perturbations/passer-la-batterie.js";
+} from "../apps/web/js/services/passer-la-batterie.js";
 import { laFamilleDeclaree, leCorpus } from "./la-batterie-des-perturbations/le-corpus.js";
 import {
   unLecteurFidele, unLecteurQuiDevine
 } from "./la-batterie-des-perturbations/un-lecteur-de-carton.js";
 import {
   lesPagesDuDocument, unLecteurDuServeur
-} from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
+} from "../apps/web/js/services/un-lecteur-du-serveur.js";
 import { FAMILLE } from "../apps/web/js/services/les-familles-de-document.js";
 
 const LE_RICT = leCorpus().find((un) => un.famille === FAMILLE.CONTROLE);
@@ -942,7 +942,7 @@ test("les pages d'un document se séparent sur la coupure déclarée", () => {
  */
 test("le câblage de la batterie nomme les mêmes fonctions et les mêmes champs que le serveur", () => {
   const ici = readFileSync(
-    new URL("./la-mesure-des-analyses/un-lecteur-du-serveur.js", import.meta.url), "utf8");
+    new URL("../apps/web/js/services/un-lecteur-du-serveur.js", import.meta.url), "utf8");
   const laBas = readFileSync(
     new URL("../supabase/functions/lire-les-rapports/index.ts", import.meta.url), "utf8");
 

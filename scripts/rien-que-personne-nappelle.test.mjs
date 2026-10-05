@@ -87,11 +87,11 @@ const LES_MODULES_SOUS_GARDE = [
   "apps/web/js/services/lempreinte-dune-lecture.js",
   "apps/web/js/services/ce-qui-separe.js",
   "apps/web/js/services/les-invariants-dune-lecture.js",
-  "scripts/la-mesure-des-analyses/un-lecteur-du-serveur.js",
+  "apps/web/js/services/un-lecteur-du-serveur.js",
   // La batterie de perturbations.
-  "scripts/la-batterie-des-perturbations/les-perturbations.js",
-  "scripts/la-batterie-des-perturbations/la-relation.js",
-  "scripts/la-batterie-des-perturbations/passer-la-batterie.js",
+  "apps/web/js/services/les-perturbations.js",
+  "apps/web/js/services/la-relation.js",
+  "apps/web/js/services/passer-la-batterie.js",
   "scripts/la-batterie-des-perturbations/le-corpus.js",
   "scripts/la-batterie-des-perturbations/un-lecteur-de-carton.js",
   // La dérive des analyses gelées.
@@ -100,9 +100,9 @@ const LES_MODULES_SOUS_GARDE = [
   "scripts/la-derive-des-analyses/les-gelees-du-serveur.js",
   "scripts/la-derive-des-analyses/une-base-de-carton.js",
   // Le jeu de référence, et la ligne du temps.
-  "scripts/le-jeu-de-reference/lannotation.js",
-  "scripts/le-jeu-de-reference/la-confrontation.js",
-  "scripts/le-jeu-de-reference/passer-le-jeu.js",
+  "apps/web/js/services/lannotation.js",
+  "apps/web/js/services/la-confrontation.js",
+  "apps/web/js/services/passer-le-jeu.js",
   "apps/web/js/services/les-faits-dates.js",
   "apps/web/js/services/la-ligne-du-temps.js"
 ];

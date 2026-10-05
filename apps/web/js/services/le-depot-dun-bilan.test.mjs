@@ -19,10 +19,10 @@ import test from "node:test";
 import {
   MESURE, direLeDepot, deposerUnBilan, leBilanAVerser, ouDeposer
 } from "./le-depot-dun-bilan.js";
-import { leBilan } from "../../../../scripts/la-batterie-des-perturbations/passer-la-batterie.js";
-import { VERDICT } from "../../../../scripts/la-batterie-des-perturbations/la-relation.js";
+import { leBilan } from "./passer-la-batterie.js";
+import { VERDICT } from "./la-relation.js";
 import { CE_QUI_SEST_PASSE, leBilanDeLaDerive } from "./la-derive-des-analyses.js";
-import { ETAPE, leBilanDuJeu } from "../../../../scripts/le-jeu-de-reference/la-confrontation.js";
+import { ETAPE, leBilanDuJeu } from "./la-confrontation.js";
 
 /* ── Rien ne traverse qui ne soit un nombre ───────────────────────────────── */
 
