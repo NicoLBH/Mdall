@@ -28,9 +28,9 @@
  *      épreuve qui n'a pas eu lieu n'est pas une épreuve qui passe (règle 5).
  */
 
-import { lempreinteDuneLecture } from "../la-mesure-des-analyses/lempreinte-dune-lecture.js";
+import { lempreinteDuneLecture } from "../../apps/web/js/services/lempreinte-dune-lecture.js";
 import { laRelationTient, VERDICT } from "./la-relation.js";
-import { lesInvariantsDUneLecture } from "../la-mesure-des-analyses/les-invariants.js";
+import { lesInvariantsDUneLecture } from "../../apps/web/js/services/les-invariants-dune-lecture.js";
 import { LES_PERTURBATIONS } from "./les-perturbations.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();

@@ -33,7 +33,7 @@
  * bougé, nommément, et c'est vous qui savez ce que vous aviez voulu.
  */
 
-import { CE_QUI_SEST_PASSE, laDeriveDesGelees } from "./la-derive-des-analyses/la-derive.js";
+import { CE_QUI_SEST_PASSE, laDeriveDesGelees } from "../apps/web/js/services/la-derive-des-analyses.js";
 import { lePluriel } from "../apps/web/js/services/lexploitation-de-mdall.js";
 import {
   lesGeleesDunProjet, parLeReseau
@@ -43,7 +43,7 @@ import {
 } from "./la-derive-des-analyses/une-base-de-carton.js";
 import {
   MESURE, deposerUnBilan, direLeDepot, ouDeposer
-} from "./la-mesure-des-analyses/le-depot-dun-bilan.js";
+} from "../apps/web/js/services/le-depot-dun-bilan.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 

@@ -36,13 +36,13 @@
  */
 
 import { lempreinteDuneLecture, combienDeReleves }
-  from "../la-mesure-des-analyses/lempreinte-dune-lecture.js";
-import { ceQuiSepare } from "../la-mesure-des-analyses/ce-qui-separe.js";
-import { lesInvariantsDUneLecture } from "../la-mesure-des-analyses/les-invariants.js";
+  from "./lempreinte-dune-lecture.js";
+import { ceQuiSepare } from "./ce-qui-separe.js";
+import { lesInvariantsDUneLecture } from "./les-invariants-dune-lecture.js";
 import { lesSuitesDeLecture } from "./les-analyses-gelees.js";
 // L'accord du projet, et non un `s` posé à la main : « 1 écarts » se lit, et
 // ce qui se lit mal cesse d'être lu (règle 10).
-import { lePluriel } from "../../apps/web/js/services/lexploitation-de-mdall.js";
+import { lePluriel } from "./lexploitation-de-mdall.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);

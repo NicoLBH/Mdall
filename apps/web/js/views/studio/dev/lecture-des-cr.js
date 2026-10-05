@@ -847,6 +847,73 @@ function lesAnalysesDeLaVue(vue) {
   return toutes.flatMap((une) => (Array.isArray(une) ? une : []));
 }
 
+/**
+ * **Les analyses entières, demandées au moment du clic.**
+ *
+ * ## Le défaut que cela ferme
+ *
+ * L'export emportait les lignes que le tableau a chargées, et le tableau **ne
+ * charge pas** `analyse_gelee` — c'est la plus grosse colonne, et la liste n'en
+ * montre rien. Il disait donc, sur les seize lignes d'un chantier : « l'analyse
+ * n'a pas été emportée ».
+ *
+ * C'était exact, et c'était un outil de diagnostic qui ne diagnostiquait rien :
+ * la question qu'on pose en l'ouvrant est « qu'est-ce que la lecture a rendu ? »,
+ * et c'était la seule à laquelle il ne pouvait pas répondre.
+ *
+ * ## Pourquoi au clic, et non en permanence
+ *
+ * Trois requêtes de plus, et elles ramènent des transcriptions entières. Les
+ * faire à chaque ouverture d'écran ferait payer à tout le monde le réseau d'un
+ * geste que l'on fait trois fois par mois. Elles partent donc **quand on clique**,
+ * et seulement alors.
+ *
+ * ## Et si elles échouent
+ *
+ * On exporte quand même, avec ce que le tableau a. Un export qui refuse de
+ * s'écrire parce qu'une des trois tables n'a pas répondu laisse sans rien celui
+ * qui cherche une panne — et c'est au moment où il cherche une panne qu'il
+ * clique (règle 5). Le fichier dit alors ce qu'il porte, comme toujours.
+ */
+async function lesAnalysesEntieres(projet) {
+  if (!texte(projet)) return null;
+
+  const [crs, fils, rapports] = await Promise.all([
+    import("../../../services/lectures-du-cr-supabase.js")
+      .then((base) => base.listerLesLectures(projet, { limite: 300, avecLanalyse: true }))
+      .catch(() => null),
+    lesFilsDuProjet(projet, { avecLanalyse: true }),
+    lesRapportsDuProjet(projet, { avecLanalyse: true })
+  ]);
+
+  const toutes = [crs, fils, rapports];
+  if (toutes.every((une) => une === null)) return null;
+
+  return toutes.flatMap((une) => (Array.isArray(une) ? une : []));
+}
+
+/** Écrire le fichier de diagnostic, analyses comprises. */
+async function exporterTout() {
+  // **Le chantier se demande, il n'est pas dans l'état.** Cet écran ne le garde
+  // pas ; `projetCourant()` est la façon dont tout le reste du module le lit, et
+  // une copie dans l'état aurait vieilli au changement de projet.
+  const projectId = texte(await projetCourant());
+  const entieres = await lesAnalysesEntieres(projectId);
+
+  downloadJsonFile({
+    filename: leNomDeLexportDesAnalyses(),
+    data: lexportDesAnalyses({
+      documents: lesDocumentsDeLaVue(etat),
+      // **Celles qu'on vient de demander**, et à défaut celles que le tableau a
+      // — qui portent au moins les dates, les procédés et les identifiants.
+      analyses: entieres ?? lesAnalysesDeLaVue(etat),
+      projet: projectId,
+      famille: etat.famille,
+      filtre: texte(etat.filtre)
+    })
+  });
+}
+
 function lesDocumentsDeLaVue(vue) {
   const mails = vue.dejaLusMails ?? null;
   const controles = vue.dejaLusControles ?? null;
@@ -1016,7 +1083,21 @@ function leTitreDeLaVue(vue) {
  * libellés comme celui des Actions les gardait avant (règle 4).
  */
 function renderLesDocumentsAnalyses(vue) {
-  if (vue.phase !== "vide" || vue.lance) return "";
+  /**
+   * **Le tableau ne disparaît plus quand on vient de lancer une lecture.**
+   *
+   * Il y avait `|| vue.lance` ici, et l'intention était bonne : la phrase « 1
+   * rapport envoyé » devait être la seule chose à lire au moment où elle
+   * arrive. Le résultat était un écran **vide**, avec une phrase verte au
+   * milieu et plus rien d'autre — ni le tableau, ni le rail, ni le détail d'un
+   * document. On ne pouvait plus rien faire qu'attendre, et c'est exactement ce
+   * que la file au serveur existe pour éviter.
+   *
+   * La phrase reste, **au-dessus** du tableau. Et ce qui vient de partir s'y
+   * inscrit aussitôt en « en attente » : on voit sa propre demande entrer dans
+   * la liste, ce qui est une bien meilleure confirmation qu'un écran vide.
+   */
+  if (vue.phase !== "vide") return "";
 
   return renderLeTableauDesDocuments({
     documents: lesDocumentsDeLaVue(vue),
@@ -3627,19 +3708,7 @@ function brancher(hote) {
      * pas changé, seul un fichier est apparu.
      */
     if (cible.closest(`[${TOUT_EXPORTER}]`)) {
-      // **Le chantier se demande, il n'est pas dans l'état.** Cet écran ne le
-      // garde pas ; `projetCourant()` est la façon dont tout le reste du module
-      // le lit, et une copie dans l'état aurait vieilli au changement de projet.
-      void projetCourant().then((projectId) => downloadJsonFile({
-        filename: leNomDeLexportDesAnalyses(),
-        data: lexportDesAnalyses({
-          documents: lesDocumentsDeLaVue(etat),
-          analyses: lesAnalysesDeLaVue(etat),
-          projet: texte(projectId),
-          famille: etat.famille,
-          filtre: texte(etat.filtre)
-        })
-      }));
+      void exporterTout();
       return;
     }
 
@@ -4556,21 +4625,21 @@ async function laFileDuProjet(projet) {
  * Chargé à la demande : ce service passe par `auth.js`, qui charge le SDK Supabase
  * depuis le réseau — ce qu'une exécution hors navigateur ne saurait résoudre.
  */
-async function lesFilsDuProjet(projet) {
+async function lesFilsDuProjet(projet, { avecLanalyse = false } = {}) {
   try {
     const { listerLesLecturesDeFils } = await import("../../../services/lectures-du-fil-supabase.js");
-    return await listerLesLecturesDeFils(projet, { limite: 300 });
+    return await listerLesLecturesDeFils(projet, { limite: 300, avecLanalyse });
   } catch {
     return null;
   }
 }
 
 /** Les rapports de contrôle déjà lus, à la même enseigne. */
-async function lesRapportsDuProjet(projet) {
+async function lesRapportsDuProjet(projet, { avecLanalyse = false } = {}) {
   try {
     const { listerLesLecturesDeRapports } =
       await import("../../../services/lectures-de-rapports-supabase.js");
-    return await listerLesLecturesDeRapports(projet, { limite: 300 });
+    return await listerLesLecturesDeRapports(projet, { limite: 300, avecLanalyse });
   } catch {
     return null;
   }

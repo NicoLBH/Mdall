@@ -28,9 +28,9 @@
  * une question d'accès à une question de sens.
  */
 
-import { FAMILLE } from "../../apps/web/js/services/les-familles-de-document.js";
-import { LE_SELECT_DUNE_LECTURE } from "../../apps/web/js/services/la-lecture-conservee.js";
-import { LE_SELECT_DUN_RAPPORT } from "../../apps/web/js/services/la-lecture-dun-rapport.js";
+import { FAMILLE } from "./les-familles-de-document.js";
+import { LE_SELECT_DUNE_LECTURE } from "./la-lecture-conservee.js";
+import { LE_SELECT_DUN_RAPPORT } from "./la-lecture-dun-rapport.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);

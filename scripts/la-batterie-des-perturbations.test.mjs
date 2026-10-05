@@ -35,14 +35,14 @@ import {
 } from "./la-batterie-des-perturbations/les-perturbations.js";
 import {
   LES_FAMILLES_PROJETEES, combienDeReleves, laCleDunReleve, lempreinteDuneLecture
-} from "./la-mesure-des-analyses/lempreinte-dune-lecture.js";
+} from "../apps/web/js/services/lempreinte-dune-lecture.js";
 import {
   VERDICT, laRelationTient
 } from "./la-batterie-des-perturbations/la-relation.js";
-import { ceQuiSepare } from "./la-mesure-des-analyses/ce-qui-separe.js";
+import { ceQuiSepare } from "../apps/web/js/services/ce-qui-separe.js";
 import {
   lesCitationsSeRetrouvent, lesMarquesSontDeclarees, pourChercherUneCitation
-} from "./la-mesure-des-analyses/les-invariants.js";
+} from "../apps/web/js/services/les-invariants-dune-lecture.js";
 import {
   POURQUOI_PAS, leBilan, passerLaBatterie, passerUneEpreuve
 } from "./la-batterie-des-perturbations/passer-la-batterie.js";

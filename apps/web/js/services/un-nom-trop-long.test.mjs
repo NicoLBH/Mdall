@@ -1,88 +1,112 @@
 /**
- * L'épreuve du nom raccourci.
+ * L'épreuve du découpage d'un nom.
  *
- * **La propriété qui compte : jamais plus long que demandé.** Un nom d'un
- * caractère de trop pousse la colonne voisine, et c'est tout le défaut qu'on
- * vient réparer.
+ * **La propriété qui compte : la fin ne se perd jamais.** C'est elle qui
+ * distingue deux documents du même chantier — l'indice, le numéro, l'extension
+ * —, et c'est exactement ce que `text-overflow: ellipsis` coupe.
  *
- * **Et la coupe est par le milieu**, parce que la fin distingue : deux rapports
- * du même chantier ne diffèrent que par leur numéro, au début, et par leur
- * indice, à la fin.
+ * **Et le module ne coupe plus.** Il découpe, et c'est le navigateur qui décide
+ * s'il faut rogner : un compte de caractères rendait un nom abrégé à côté de
+ * trente centimètres de vide dès que la colonne était large.
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AU_PLUS, LA_COUPE, ceQuUnNomMontre, unNomRaccourci } from "./un-nom-trop-long.js";
+import { LA_FIN_QUON_GARDE, ceQuUnNomMontre } from "./un-nom-trop-long.js";
 
-const LONG = "1824_RICT_03_VERIFAS_Montholon_Mediatheque_phase_EXE_indice_C.pdf";
+/** Deux rapports du même chantier, qui ne diffèrent que par leur indice. */
+const TROIS = "1824_RICT_03_VERIFAS_Montholon_Mediatheque_phase_EXE_indice_C.pdf";
+const QUATRE = "1824_RICT_04_VERIFAS_Montholon_Mediatheque_phase_EXE_indice_D.pdf";
 
-test("un nom qui tient ne se touche pas", () => {
-  assert.equal(unNomRaccourci("RICT-03.pdf"), "RICT-03.pdf");
-  assert.equal(unNomRaccourci("a".repeat(AU_PLUS), AU_PLUS).length, AU_PLUS);
-  assert.equal(unNomRaccourci("a".repeat(AU_PLUS), AU_PLUS).includes(LA_COUPE), false);
-});
+/* ── Rien ne se perd ──────────────────────────────────────────────────────── */
 
-test("un nom raccourci n'est jamais plus long que demandé", () => {
-  // La coupe comprise : une version qui l'ajoutait par-dessus rendait des noms
-  // d'un caractère de trop — assez pour pousser la colonne voisine.
-  for (const borne of [4, 7, 12, 20, 40, 60]) {
-    const dit = unNomRaccourci(LONG, borne);
-    assert.ok(dit.length <= borne,
-      `à ${borne}, le nom rendu fait ${dit.length} : « ${dit} »`);
+test("les deux morceaux recomposent le nom entier, sans rien ajouter", () => {
+  for (const nom of [TROIS, QUATRE, "CR_16.pdf", "a", ""]) {
+    const ce = ceQuUnNomMontre(nom);
+    assert.equal(`${ce.debut}${ce.fin}`, nom.trim(),
+      `« ${nom} » ne se recompose pas : le découpage perd ou ajoute du texte`);
   }
 });
 
-test("la coupe est au milieu : le début et la fin restent", () => {
-  const dit = unNomRaccourci(LONG, 30);
+/**
+ * **Le défaut que ce module existe pour empêcher.**
+ *
+ * Coupés par la fin, ces deux rapports sont le même nom. La fin doit donc
+ * rester entière dans les deux cas, et les distinguer.
+ */
+test("deux rapports qui ne diffèrent que par leur indice restent distincts", () => {
+  const trois = ceQuUnNomMontre(TROIS);
+  const quatre = ceQuUnNomMontre(QUATRE);
 
-  // Le numéro de rapport est au début, l'indice et l'extension à la fin. Coupés
-  // par la fin, deux rapports du même chantier seraient le même nom.
-  assert.ok(dit.startsWith("1824_RICT_03"), dit);
-  assert.ok(dit.endsWith("indice_C.pdf"), dit);
-  assert.ok(dit.includes(LA_COUPE), dit);
+  assert.notEqual(trois.fin, quatre.fin,
+    "les deux fins sont identiques : l'indice est perdu");
+  assert.ok(trois.fin.endsWith("_C.pdf"));
+  assert.ok(quatre.fin.endsWith("_D.pdf"));
 });
 
-test("deux noms qui ne diffèrent que par leur numéro restent distincts", () => {
-  // C'est la raison d'être de la coupe par le milieu.
-  const trois = unNomRaccourci(LONG, 30);
-  const quatre = unNomRaccourci(LONG.replace("RICT_03", "RICT_04"), 30);
-  assert.notEqual(trois, quatre);
+test("la fin garde exactement ce qu'on a demandé de garder", () => {
+  const ce = ceQuUnNomMontre(TROIS);
+  assert.equal(ce.fin.length, LA_FIN_QUON_GARDE);
+  assert.equal(ce.fin, TROIS.slice(-LA_FIN_QUON_GARDE));
+
+  // Et une autre longueur se demande, pour une colonne plus étroite.
+  assert.equal(ceQuUnNomMontre(TROIS, 4).fin, ".pdf".slice(-4));
 });
 
-test("le début prend la moitié haute de la place", () => {
-  // Le numéro de rapport y vit, et c'est lui qu'on cherche en premier.
-  const dit = unNomRaccourci("abcdefghijklmnop", 8);
-  assert.equal(dit.length, 8);
-  assert.equal(dit, `abcd${LA_COUPE}nop`);
-});
+/* ── Rien n'est coupé ici ─────────────────────────────────────────────────── */
 
-test("sous quatre caractères, on ne coupe plus : il n'y aurait rien à lire", () => {
-  // « a…b » ne distingue aucun document, et « … » seul encore moins.
-  assert.equal(unNomRaccourci(LONG, 3), LONG.slice(0, 3));
-  assert.equal(unNomRaccourci(LONG, 0), "");
-  assert.equal(unNomRaccourci(LONG, -5), "");
-});
-
-test("rien d'illisible ne fait tomber la coupe", () => {
-  for (const rien of [null, undefined, "", 0, [], {}]) {
-    assert.equal(typeof unNomRaccourci(rien), "string");
+/**
+ * **Aucun point de suspension nulle part**, et c'est le changement : les mettre
+ * ici reviendrait à décider de couper sans savoir si le nom tient. C'est la
+ * feuille de style qui les pose, et seulement quand le début déborde vraiment.
+ */
+test("le module ne pose aucun caractère de coupe", () => {
+  for (const nom of [TROIS, "CR_16.pdf", "x".repeat(400)]) {
+    const ce = ceQuUnNomMontre(nom);
+    assert.ok(!`${ce.debut}${ce.fin}`.includes("…"),
+      "le module coupe encore lui-même, au lieu de laisser le navigateur mesurer");
   }
-  assert.equal(unNomRaccourci(LONG, "pas un nombre"), LONG.slice(0, 0));
 });
 
-/* ── Ce qu'un rendu en montre ─────────────────────────────────────────────── */
+/** Et il ne raccourcit rien : un nom de quatre cents caractères passe entier. */
+test("un nom très long n'est pas raccourci", () => {
+  const long = `${"x".repeat(400)}.pdf`;
+  const ce = ceQuUnNomMontre(long);
+  assert.equal(`${ce.debut}${ce.fin}`.length, long.length);
+});
 
-test("l'infobulle ne porte le nom entier que s'il a été coupé", () => {
-  // Une infobulle qui répète ce qui est déjà lisible est une infobulle qu'on
-  // apprend à ignorer — et l'on finit par ignorer celles qui disent quelque chose.
-  const court = ceQuUnNomMontre("RICT-03.pdf");
-  assert.equal(court.dit, "RICT-03.pdf");
-  assert.equal(court.titre, "");
-  assert.equal(court.coupe, false);
+/* ── Les cas courts ───────────────────────────────────────────────────────── */
 
-  const long = ceQuUnNomMontre(LONG);
-  assert.equal(long.coupe, true);
-  assert.equal(long.titre, LONG, "le nom entier n'est pas dans l'infobulle");
-  assert.ok(long.dit.length <= AU_PLUS);
+/**
+ * **Un nom court passe entier dans la fin.** Le découper donnerait un début vide
+ * et un morceau de balisage creux sur chaque ligne courte.
+ */
+test("un nom plus court que la fin gardée ne se découpe pas", () => {
+  const ce = ceQuUnNomMontre("CR_16.pdf");
+  assert.equal(ce.debut, "");
+  assert.equal(ce.fin, "CR_16.pdf");
+});
+
+test("rien d'illisible ne fait tomber le découpage", () => {
+  for (const rien of [null, undefined, 0, false, {}]) {
+    const ce = ceQuUnNomMontre(rien);
+    assert.equal(typeof ce.debut, "string");
+    assert.equal(typeof ce.fin, "string");
+    assert.equal(typeof ce.titre, "string");
+  }
+});
+
+/* ── L'infobulle ──────────────────────────────────────────────────────────── */
+
+/**
+ * **Le nom entier est toujours là**, et c'est assumé. La version qui comptait
+ * les caractères savait si elle avait coupé ; celle-ci ne peut pas le savoir,
+ * puisque c'est le navigateur qui coupe. Entre une infobulle parfois redondante
+ * et un nom qu'on ne peut plus retrouver, on garde l'infobulle.
+ */
+test("l'infobulle porte le nom entier, long ou court", () => {
+  assert.equal(ceQuUnNomMontre(TROIS).titre, TROIS);
+  assert.equal(ceQuUnNomMontre("CR_16.pdf").titre, "CR_16.pdf");
+  assert.equal(ceQuUnNomMontre("  CR_16.pdf  ").titre, "CR_16.pdf");
 });

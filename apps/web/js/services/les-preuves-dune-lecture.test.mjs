@@ -256,7 +256,7 @@ test("le premier non-dit est celui qui gêne", () => {
  */
 test("la batterie de perturbations pose exactement ce contrôle", async () => {
   const { lesCitationsSeRetrouvent: parLaBatterie, lesMarquesSontDeclarees: marquesBatterie } =
-    await import("../../../../scripts/la-mesure-des-analyses/les-invariants.js");
+    await import("./les-invariants-dune-lecture.js");
 
   const releves = [
     { cle: "A-07", citation: "L'étude de sol G2 AVP", marque: "F" },

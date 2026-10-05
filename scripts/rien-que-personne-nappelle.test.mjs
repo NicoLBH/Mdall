@@ -84,9 +84,9 @@ const LES_MODULES_SOUS_GARDE = [
    * donc dès leur livraison.
    */
   // Le socle commun aux deux outils de mesure.
-  "scripts/la-mesure-des-analyses/lempreinte-dune-lecture.js",
-  "scripts/la-mesure-des-analyses/ce-qui-separe.js",
-  "scripts/la-mesure-des-analyses/les-invariants.js",
+  "apps/web/js/services/lempreinte-dune-lecture.js",
+  "apps/web/js/services/ce-qui-separe.js",
+  "apps/web/js/services/les-invariants-dune-lecture.js",
   "scripts/la-mesure-des-analyses/un-lecteur-du-serveur.js",
   // La batterie de perturbations.
   "scripts/la-batterie-des-perturbations/les-perturbations.js",
@@ -95,8 +95,8 @@ const LES_MODULES_SOUS_GARDE = [
   "scripts/la-batterie-des-perturbations/le-corpus.js",
   "scripts/la-batterie-des-perturbations/un-lecteur-de-carton.js",
   // La dérive des analyses gelées.
-  "scripts/la-derive-des-analyses/les-analyses-gelees.js",
-  "scripts/la-derive-des-analyses/la-derive.js",
+  "apps/web/js/services/les-analyses-gelees.js",
+  "apps/web/js/services/la-derive-des-analyses.js",
   "scripts/la-derive-des-analyses/les-gelees-du-serveur.js",
   "scripts/la-derive-des-analyses/une-base-de-carton.js",
   // Le jeu de référence, et la ligne du temps.

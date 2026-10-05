@@ -169,6 +169,10 @@ export const RACINES = [
   // console lise **en ligne** ce que le système a fait. Elle est ce qui remplace
   // le bloc de terminal que la rubrique portait sous chaque outil de banc.
   "js/services/la-sante-des-lectures.js",
+  // Ce qu'une mesure coûte, et ce qu'une demande dit. Des phrases et des
+  // nombres : il ne nomme aucune table de lecture, et c'est ce qui lui permet
+  // de traverser la cloison.
+  "js/services/la-file-des-mesures.js",
   // Le rail commun, celui des Sujets, de la Mémoire et des Actions. La console
   // posait sept blocs à la suite sur une seule page ; elle emploie maintenant
   // la même coque que les écrans de projet, plutôt qu'une navigation à elle qui

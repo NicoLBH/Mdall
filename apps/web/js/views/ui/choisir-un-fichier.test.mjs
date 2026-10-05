@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { renderChoisirUnFichier, renderLeChemin } from "./choisir-un-fichier.js";
 import { ceQuUnNomMontre } from "../../services/un-nom-trop-long.js";
+import { NOM_COUPABLE } from "./un-nom-coupable.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 
 /** Un texte tel que la page le porte : `escapeHtml` change les apostrophes. */
@@ -39,7 +40,13 @@ test("un texte et un PDF se cliquent tous les deux", () => {
  * restituer par le modèle »). Sur la ligne, il reste en infobulle, où il ne
  * coûte aucune place.
  */
-test("le coût se dit dans la barre, et en infobulle sur la ligne", () => {
+/**
+ * **L'infobulle porte le nom, et non le coût.** Les deux ne tiennent pas
+ * ensemble, et c'est le nom qui l'emporte : le prix est annoncé dans la barre de
+ * lancement, pour toute la file, alors que le nom coupé ne se retrouve nulle
+ * part ailleurs.
+ */
+test("le coût se dit dans la barre, avant le clic", () => {
   const html = renderChoisirUnFichier({
     entrees: DOSSIER,
     choisis: new Set(["d2"]),
@@ -49,10 +56,11 @@ test("le coût se dit dans la barre, et en infobulle sur la ligne", () => {
   // Plus de colonne : le nom prend toute la largeur.
   assert.doesNotMatch(html, /documents-repo__cell--message/,
     "la colonne du coût est encore là, et elle coupe les noms");
-  // L'infobulle, elle, reste.
-  assert.match(html, /title="Ce document sera extrait puis restitué par le modèle\."/);
-  // Et la barre l'annonce pour toute la file, avant le clic.
+  // La barre l'annonce pour toute la file, avant le clic.
   assert.match(html, /1 PDF à extraire puis restituer par le modèle/);
+  // Et l'infobulle de la ligne porte le **nom**, qui ne se retrouve nulle part
+  // ailleurs — le prix, lui, est déjà dans la barre.
+  assert.doesNotMatch(html, /title="Ce document sera extrait/);
 });
 
 test("un format illisible ne se clique pas, et dit pourquoi", () => {
@@ -295,7 +303,7 @@ test("l'état a sa colonne, et ne suit plus un nom de cent trente caractères", 
  * coupe est celle du tableau des analyses : deux façons de raccourcir auraient
  * donné deux noms différents pour un même fichier, d'un écran à l'autre.
  */
-test("un nom trop long se coupe par le milieu, et porte son entier au survol", () => {
+test("un nom long se découpe en deux, et la fin ne se rogne pas", () => {
   const html = renderChoisirUnFichier({
     entrees: [{
       type: ENTREE.FICHIER, id: "a", nom: UN_NOM_INTERMINABLE, choisissable: true,
@@ -303,18 +311,26 @@ test("un nom trop long se coupe par le milieu, et porte son entier au survol", (
     }]
   });
 
-  const coupe = ceQuUnNomMontre(UN_NOM_INTERMINABLE);
-  assert.ok(coupe.dit.length < UN_NOM_INTERMINABLE.length, "la fixture ne coupe rien");
+  const ce = ceQuUnNomMontre(UN_NOM_INTERMINABLE);
 
-  // Le nom affiché est le nom coupé, et le nom entier ne s'affiche pas.
-  assert.match(html, commeAffichee(coupe.dit));
-  assert.doesNotMatch(html, new RegExp(`>${UN_NOM_INTERMINABLE.slice(0, 80)}`),
-    "le nom entier est affiché : il pousse l'état hors de la ligne");
+  /**
+   * **Les deux morceaux sont rendus séparément**, et c'est tout l'objet : la
+   * feuille de style rogne le premier s'il déborde, et ne touche jamais au
+   * second. Un seul morceau laisserait `text-overflow` couper la fin — et la
+   * fin est ce qui distingue deux rapports du même chantier.
+   */
+  assert.ok(html.includes(`<span class="${NOM_COUPABLE}__debut">${escapeHtml(ce.debut)}</span>`),
+    "le début du nom n'est pas dans son propre élément");
+  assert.ok(html.includes(`<span class="${NOM_COUPABLE}__fin">${escapeHtml(ce.fin)}</span>`),
+    "la fin du nom n'est pas protégée dans son propre élément");
 
-  // **Le début et la fin sont tous deux là** : c'est le début qui dit le
-  // chantier, et la fin qui dit le numéro d'indice.
-  assert.ok(html.includes(UN_NOM_INTERMINABLE.slice(0, 10)), "le début du nom a été perdu");
-  assert.ok(html.includes(UN_NOM_INTERMINABLE.slice(-12)), "la fin du nom a été perdue");
+  // Et le conteneur porte la classe qui fait tenir les deux ensemble.
+  assert.match(html, new RegExp(`class="[^"]*\\b${NOM_COUPABLE}\\b`));
+
+  // **Rien n'est coupé dans le balisage** : le nom entier y est, en deux
+  // morceaux. C'est le navigateur qui décide, à la largeur qu'il a.
+  assert.ok(html.includes(escapeHtml(ce.debut)) && html.includes(escapeHtml(ce.fin)));
+  assert.ok(!`${ce.debut}${ce.fin}`.includes("…"));
 
   // Et l'infobulle porte l'entier : c'est le seul endroit où on le retrouve.
   assert.ok(html.includes(`title="${escapeHtml(UN_NOM_INTERMINABLE)}"`),
@@ -342,15 +358,33 @@ test("la grille du choix déclare la colonne de l'état", async () => {
     "le balisage porte deux cellules et la grille n'en déclare qu'une");
 });
 
-/** Un nom court ne porte pas d'infobulle : elle répéterait ce qui est lisible. */
-test("un nom qui tient en entier ne porte pas d'infobulle de nom", () => {
+/**
+ * **Un nom court porte quand même son infobulle**, et c'est assumé : on ne sait
+ * pas s'il tient, puisque c'est le navigateur qui mesure. Entre une infobulle
+ * parfois redondante et un nom qu'on ne peut plus retrouver, on garde
+ * l'infobulle.
+ */
+test("un nom court s'affiche entier, sans être découpé", () => {
   const html = renderChoisirUnFichier({
     entrees: [{
       type: ENTREE.FICHIER, id: "a", nom: "CR_16.pdf", choisissable: true,
       pourquoi: "", lecture: "", ou: OU_EN_EST.JAMAIS, motif: ""
     }]
   });
-  assert.doesNotMatch(html, /title="CR_16\.pdf"/);
+
+  assert.match(html, /title="CR_16\.pdf"/);
+  // Il passe entier dans la fin : pas de début vide dans le balisage.
+  assert.ok(html.includes(`<span class="${NOM_COUPABLE}__fin">CR_16.pdf</span>`));
+  /**
+   * **Aucun élément de début, et non un élément vide.**
+   *
+   * L'épreuve cherchait `__debut"></span>` — une balise strictement vide. Un
+   * début réduit à une espace la laissait passer, et la batterie de mutations
+   * l'a montré : ce qu'on veut interdire est le morceau de balisage, pas son
+   * contenu.
+   */
+  assert.ok(!html.includes(`${NOM_COUPABLE}__debut`),
+    "un morceau de balisage de début sur chaque ligne courte");
 });
 
 /**

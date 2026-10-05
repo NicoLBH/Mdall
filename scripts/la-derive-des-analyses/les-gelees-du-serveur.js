@@ -24,7 +24,7 @@
  * de carton.
  */
 
-import { OU_SONT_LES_GELEES, uneGelee } from "./les-analyses-gelees.js";
+import { OU_SONT_LES_GELEES, uneGelee } from "../../apps/web/js/services/les-analyses-gelees.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);

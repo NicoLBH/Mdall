@@ -146,6 +146,10 @@ const LES_MIGRATIONS = [
   // qu'une promesse de ce genre — « des nombres, jamais un contenu » — ne se
   // relit pas : elle s'essaie.
   "202611260001_la_sante_des_lectures.sql",
+  // La file des quatre outils de justesse, demandés depuis la console. Elle
+  // porte une dépense — une batterie, c'est une quarantaine d'appels au modèle
+  // — et sa porte est donc exactement ce qu'il faut essayer de forcer.
+  "202611270001_les_mesures_demandees.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -4682,4 +4686,155 @@ test("sans aucune lecture, la santé rend quand même sa ligne",
     assert.equal(lu.ok, true, lu.motif);
     assert.match(lu.sortie, /\[\]\s*\|\s*t\s*\|\s*t/,
       "la fonction ne rend pas sa fenêtre, ou ne rend pas de ligne du tout");
+  });
+
+/* ── La file des mesures de justesse ──────────────────────────────────────── */
+
+/**
+ * **Cette file porte une dépense**, et c'est ce qui la rend différente des
+ * autres : une batterie de perturbations, c'est une quarantaine d'appels au
+ * modèle. Sa porte est donc exactement ce qu'il faut essayer de forcer — pas
+ * relire.
+ */
+test("demander une mesure se refuse à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_demandees;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select public.demander_une_mesure('perturbations');");
+    assert.equal(etranger.ok, false, "un compte ordinaire lance une batterie");
+
+    // Et il ne peut pas non plus poser la ligne lui-même, par-dessus la fonction.
+    const direct = banc.sousLadresse("quelquun@ailleurs.example",
+      "insert into public.mesures_demandees (outil) values ('perturbations');");
+    assert.equal(direct.ok, false, "un compte ordinaire pose une demande à la main");
+
+    assert.equal(banc.sql("select count(*) from public.mesures_demandees;").sortie.trim(), "0");
+  });
+
+test("un administrateur demande une mesure, et la relit", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.mesures_demandees;");
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  const pose = banc.sousLadresse("patron@mdall.example",
+    "select public.demander_une_mesure('derive');");
+  assert.equal(pose.ok, true, pose.motif);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select outil, statut, a_depose from public.les_mesures_demandees(20);");
+  assert.match(lu.sortie, /derive\s*\|\s*en_attente\s*\|\s*f/,
+    "la demande n'arrive pas en attente, ou se dit déjà déposée");
+});
+
+/**
+ * **Deux clics ne font pas deux batteries.**
+ *
+ * Quatre-vingts appels au modèle au lieu de quarante — et le second bilan
+ * écraserait le premier à l'écran, de sorte qu'on ne verrait même pas qu'on a
+ * payé deux fois.
+ */
+test("une seconde demande du même outil rend la première", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.mesures_demandees;");
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  const une = banc.sousLadresse("patron@mdall.example",
+    "select public.demander_une_mesure('perturbations');").sortie.trim();
+  const deux = banc.sousLadresse("patron@mdall.example",
+    "select public.demander_une_mesure('perturbations');").sortie.trim();
+
+  assert.equal(deux, une, "le second clic a posé une seconde batterie");
+  assert.equal(
+    banc.sql("select count(*) from public.mesures_demandees;").sortie.trim(), "1");
+
+  // **Un autre outil n'est pas bloqué par celui-là** : ils ne mesurent pas la
+  // même chose, et rien n'empêche de les lancer ensemble.
+  banc.sousLadresse("patron@mdall.example", "select public.demander_une_mesure('derive');");
+  assert.equal(
+    banc.sql("select count(*) from public.mesures_demandees;").sortie.trim(), "2");
+});
+
+/** Et une demande terminée ne bloque plus la suivante : on remesure. */
+test("une demande terminée laisse repartir l'outil", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.mesures_demandees;");
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  banc.sousLadresse("patron@mdall.example", "select public.demander_une_mesure('derive');");
+  banc.sql("update public.mesures_demandees set statut = 'fini', fini_le = now();");
+
+  banc.sousLadresse("patron@mdall.example", "select public.demander_une_mesure('derive');");
+  assert.equal(
+    banc.sql("select count(*) from public.mesures_demandees;").sortie.trim(), "2",
+    "un outil déjà mesuré ne se relance plus jamais");
+});
+
+/**
+ * **Un outil qu'on n'a pas écrit ne se demande pas.** Une valeur inconnue serait
+ * une ligne que la fonction de bord ne saurait pas servir — elle resterait en
+ * attente pour toujours, et l'écran l'annoncerait « en cours » (règle 5).
+ */
+test("un outil inconnu ne se demande pas", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  const pose = banc.sousLadresse("patron@mdall.example",
+    "select public.demander_une_mesure('un_outil_quon_na_pas_ecrit');");
+  assert.equal(pose.ok, false, "n'importe quel outil se demande");
+  assert.match(pose.motif, /un_outil_quon_connait/,
+    "le refus ne vient pas de la contrainte qui nomme les quatre outils");
+});
+
+/**
+ * **Une demande qui a eu lieu ne s'efface pas** (règle 6). Une file dont on
+ * retire les lignes en échec n'est plus une file : on relancerait sans savoir
+ * qu'on a déjà essayé, et la facture serait payée deux fois.
+ *
+ * Et elle ne se modifie pas non plus : une console qui pourrait se déclarer
+ * « fini » sans avoir rien mesuré pourrait écrire la justesse qui lui plaît.
+ */
+test("une demande ne s'efface ni ne se modifie depuis la console",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.mesures_demandees;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    banc.sousLadresse("patron@mdall.example", "select public.demander_une_mesure('derive');");
+
+    banc.sousLadresse("patron@mdall.example",
+      "update public.mesures_demandees set statut = 'fini';");
+    assert.equal(
+      banc.sql("select statut from public.mesures_demandees;").sortie.trim(), "en_attente",
+      "la console peut se déclarer mesurée sans avoir rien mesuré");
+
+    banc.sousLadresse("patron@mdall.example", "delete from public.mesures_demandees;");
+    assert.equal(
+      banc.sql("select count(*) from public.mesures_demandees;").sortie.trim(), "1",
+      "la console efface une demande, et l'on relance sans savoir qu'on a essayé");
+  });
+
+/** La porte se journalise, des deux côtés, comme toutes celles de la console. */
+test("demander et relire une mesure laissent une ligne au journal",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.acces_administrateurs;");
+    banc.sql("delete from public.mesures_demandees;");
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    banc.sousLadresse("quelquun@ailleurs.example",
+      "select public.demander_une_mesure('derive');");
+    assert.equal(
+      banc.sql("select count(*) from public.acces_administrateurs;").sortie.trim(), "0",
+      "un refus laisse une ligne au journal des accès");
+
+    banc.sousLadresse("patron@mdall.example", "select public.demander_une_mesure('derive');");
+    banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_mesures_demandees(20);");
+
+    const journal = banc.sql("select page, filtre from public.acces_administrateurs;");
+    assert.match(journal.sortie, /exploitation\/justesse.*demande=derive/s,
+      "demander une mesure ne laisse aucune trace");
+    assert.match(journal.sortie, /demandes=20/, "relire les demandes ne laisse aucune trace");
   });
