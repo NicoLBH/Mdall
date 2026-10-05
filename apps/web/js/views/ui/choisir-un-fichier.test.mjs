@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { renderChoisirUnFichier, renderLeChemin } from "./choisir-un-fichier.js";
+import { CE_QUE_DIT_LETAT_DUN, OU_EN_EST } from "../../services/les-documents-analyses.js";
 import {
   ENTREE, LECTURE_DU_CHOIX, entreesDuDossier
 } from "../../services/choisir-depuis-fichiers.js";
@@ -131,4 +132,122 @@ test("chaque entrée porte son type", () => {
   const pdf = DOSSIER.find((entree) => entree.nom === "cr.pdf");
   assert.equal(pdf.lecture, LECTURE_DU_CHOIX.PDF);
   assert.equal(pdf.pourquoi, "");
+});
+
+/* ── Où en est l'analyse, dans la liste ──────────────────────────────────── */
+
+/** Un dossier de quatre documents, un par état. */
+const QUATRE_ETATS = [
+  { type: ENTREE.FICHIER, id: "a", nom: "CR_16.pdf", choisissable: true, pourquoi: "",
+    lecture: "pdf", ou: OU_EN_EST.ANALYSE, motif: "" },
+  { type: ENTREE.FICHIER, id: "b", nom: "CR_17.pdf", choisissable: true, pourquoi: "",
+    lecture: "pdf", ou: OU_EN_EST.ECHOUE, motif: "ce document ne porte aucun texte" },
+  { type: ENTREE.FICHIER, id: "c", nom: "CR_18.pdf", choisissable: true, pourquoi: "",
+    lecture: "pdf", ou: OU_EN_EST.ATTENTE, motif: "" },
+  { type: ENTREE.FICHIER, id: "z", nom: "CR_19.pdf", choisissable: true, pourquoi: "",
+    lecture: "pdf", ou: OU_EN_EST.JAMAIS, motif: "" }
+];
+
+/**
+ * **C'est ici qu'on décide de dépenser.**
+ *
+ * Relancer ce qui est déjà analysé est un appel payé deux fois ; laisser de côté
+ * ce qui a échoué est un document qu'on croit lu. Ni l'un ni l'autre ne se
+ * voyait dans cette liste — il fallait sortir, aller au tableau, et revenir.
+ */
+test("chaque ligne dit où en est son analyse", () => {
+  const html = renderChoisirUnFichier({ entrees: QUATRE_ETATS });
+
+  assert.match(html, /choisir-fichier__etat--analyse/);
+  assert.match(html, /choisir-fichier__etat--echoue/);
+  assert.match(html, /choisir-fichier__etat--attente/);
+
+  assert.match(html, /déjà analysé/);
+  assert.match(html, /la lecture a échoué/);
+  assert.match(html, /lecture en cours/);
+
+  // Le motif de l'échec est l'infobulle : c'est lui qui dit s'il faut relancer.
+  assert.match(html, /ce document ne porte aucun texte/);
+});
+
+/**
+ * **Rien sur ce qui n'a jamais été analysé.**
+ *
+ * C'est le cas ordinaire dans un dossier qu'on ouvre pour la première fois : un
+ * badge sur chaque ligne n'apprendrait rien et cacherait les trois qui comptent.
+ * Le silence est l'état neutre, et le badge l'exception — l'inverse de la règle
+ * habituelle, parce qu'ici c'est l'absence d'analyse qui est la norme.
+ */
+test("un document jamais analysé ne porte aucun badge", () => {
+  const html = renderChoisirUnFichier({
+    entrees: [QUATRE_ETATS[3]]
+  });
+
+  assert.match(html, /CR_19\.pdf/);
+  assert.doesNotMatch(html, /choisir-fichier__etat/,
+    "le cas ordinaire porte un badge : les trois qui comptent s'y noieraient");
+});
+
+/** Et une entrée sans état connu ne lève pas, ni n'invente. */
+test("une entrée sans état connu ne porte rien", () => {
+  const html = renderChoisirUnFichier({
+    entrees: [{ type: ENTREE.FICHIER, id: "x", nom: "CR.pdf", choisissable: true, pourquoi: "" }]
+  });
+  assert.match(html, /CR\.pdf/);
+  assert.doesNotMatch(html, /choisir-fichier__etat/);
+});
+
+/**
+ * **Un état que le serveur nommerait demain se tait, il ne casse pas l'écran.**
+ *
+ * L'état vient de la file, c'est-à-dire d'une colonne du serveur. Qu'on y ajoute
+ * un jour un `en_cours` ou un `abandonne` est une question de quand, pas de si —
+ * et ce jour-là, le choix des documents doit rester lisible. C'est le manque dans
+ * la table qui le garantit : ce qui n'y figure pas ne s'écrit pas.
+ */
+test("un état inconnu ne se dessine pas, et la liste tient", () => {
+  const html = renderChoisirUnFichier({
+    entrees: [{ type: ENTREE.FICHIER, id: "x", nom: "CR.pdf", choisissable: true,
+      pourquoi: "", lecture: "pdf", ou: "une_chose_du_serveur", motif: "" }]
+  });
+  assert.match(html, /CR\.pdf/);
+  assert.doesNotMatch(html, /choisir-fichier__etat/,
+    "un état que l'écran ne connaît pas se dessine : il écrirait son nom brut");
+  assert.doesNotMatch(html, /undefined/);
+});
+
+/**
+ * **Les deux tables se suivent.**
+ *
+ * Le mot de chaque état vit dans le domaine (`CE_QUE_DIT_LETAT_DUN`), son ton et
+ * son icône dans cet écran. Un état ajouté d'un côté et oublié de l'autre donne
+ * soit un badge muet, soit `undefined` écrit à côté d'un nom de fichier — et rien
+ * ne l'aurait dit avant l'écran.
+ */
+test("chaque état qui a un mot a aussi un badge", () => {
+  for (const [ou, mot] of Object.entries(CE_QUE_DIT_LETAT_DUN)) {
+    const html = renderChoisirUnFichier({
+      entrees: [{ type: ENTREE.FICHIER, id: "x", nom: "CR.pdf", choisissable: true,
+        pourquoi: "", lecture: "pdf", ou, motif: "" }]
+    });
+    assert.match(html, /choisir-fichier__etat--/,
+      `« ${ou} » a un mot mais aucun badge : le mot ne s'écrirait nulle part`);
+    assert.ok(html.includes(mot), `« ${ou} » n'écrit pas son mot « ${mot} »`);
+    assert.doesNotMatch(html, /undefined/);
+  }
+});
+
+/**
+ * **Ce qui est déjà analysé reste choisissable.**
+ *
+ * On relit en ajustant une consigne, et c'est un geste légitime. L'éteindre
+ * aurait transformé une information en interdiction — et il aurait fallu sortir
+ * de l'écran pour relancer une lecture qu'on veut refaire (règle 12).
+ */
+test("un document déjà analysé se coche quand même", () => {
+  const html = renderChoisirUnFichier({ entrees: QUATRE_ETATS });
+
+  // Quatre cases, une par document : aucun état n'en retire.
+  assert.equal((html.match(/data-choisir-coche=/g) ?? []).length, 4,
+    "un état d'analyse empêche de cocher");
 });

@@ -147,7 +147,7 @@ test("chaque famille porte une icône qui existe", () => {
 /* ── Ce qui a été lancé, et qui n'est pas revenu ─────────────────────────── */
 
 import {
-  CE_QUE_DIT_LETAT, OU_EN_EST, lesComptesParEtat, lesDocumentsDuTableau,
+  CE_QUE_DIT_LETAT, CE_QUE_DIT_LETAT_DUN, OU_EN_EST, lesComptesParEtat, lesDocumentsDuTableau,
   lesDocumentsEnAttente, parEtat
 } from "./les-documents-analyses.js";
 
@@ -305,16 +305,88 @@ test("le filtre rend ceux d'un état, et tous quand il n'y en a pas", () => {
   assert.equal(parEtat(tout, "").length, 2);
 });
 
-test("les pastilles comptent les deux états", () => {
+/**
+ * **Un échec se compte à part, et ne se cache plus derrière une attente.**
+ *
+ * Les deux n'appellent pas le même geste : ce qui attend n'a besoin de rien, ce
+ * qui a échoué ne reviendra jamais tout seul. Fondus, on lisait « 3 en attente »
+ * en croyant que le serveur y travaillait (règle 5).
+ */
+test("les pastilles comptent les trois états qui ont une trace", () => {
   const tout = lesDocumentsDuTableau({
     analyses: [UN_ANALYSE, { ...UN_ANALYSE, id: "l-2", documentId: "d-2" }],
-    enAttente: lesDocumentsEnAttente([uneFile("rapports", [{ id: "d-1", nom: "A.pdf", ou: "attend" }])])
+    enAttente: lesDocumentsEnAttente([uneFile("rapports", [
+      { id: "d-1", nom: "A.pdf", ou: "attend" },
+      { id: "d-9", nom: "B.pdf", ou: "echoue", motif: "le fichier est illisible" }
+    ])])
   });
 
-  assert.deepEqual(lesComptesParEtat(tout), { attente: 1, analyse: 2 });
+  assert.deepEqual(lesComptesParEtat(tout), { attente: 1, echoue: 1, analyse: 2 });
+
+  /**
+   * **`jamais` n'est pas compté ici**, et c'est voulu : le tableau ne liste que
+   * ce qui a une trace, et un document jamais lancé n'en a aucune. C'est le
+   * choix depuis Fichiers qui le rencontre, parce que lui énumère un dossier.
+   */
+  assert.equal(lesComptesParEtat(tout)[OU_EN_EST.JAMAIS], undefined);
 });
 
 test("chaque état se dit dans les mots de l'écran", () => {
   assert.equal(CE_QUE_DIT_LETAT[OU_EN_EST.ATTENTE], "En attente");
   assert.equal(CE_QUE_DIT_LETAT[OU_EN_EST.ANALYSE], "Analysés");
+  assert.equal(CE_QUE_DIT_LETAT[OU_EN_EST.ECHOUE], "En échec");
+
+  // **Chaque état du domaine se dit**, sans exception : un état ajouté là-haut
+  // et oublié ici ferait une pastille sans mot (règle 10).
+  for (const ou of Object.values(OU_EN_EST)) {
+    assert.ok(CE_QUE_DIT_LETAT[ou], `« ${ou} » n'a pas de mot pour la pastille`);
+  }
+});
+
+/**
+ * **Chaque état qui se montre au singulier a son mot, et « jamais » n'en a pas.**
+ *
+ * Les pastilles du tableau comptent ; le choix depuis Fichiers qualifie **une**
+ * ligne, et le mot doit tenir à côté d'un nom de fichier. Les deux vocabulaires
+ * se tiennent ici, dans le domaine, et non chacun dans son écran (règle 10).
+ *
+ * `jamais` est seul à n'avoir pas d'entrée, et c'est l'énoncé : dans un dossier
+ * qu'on ouvre pour la première fois, n'avoir jamais été analysé est le cas de
+ * toutes les lignes. L'absence de clé dit « rien à écrire ici », et c'est aussi
+ * là que tombe un état que le serveur nommerait demain sans qu'on le sache.
+ */
+test("chaque état qui se dit d'un seul document a son mot", () => {
+  assert.equal(CE_QUE_DIT_LETAT_DUN[OU_EN_EST.ANALYSE], "déjà analysé");
+  assert.equal(CE_QUE_DIT_LETAT_DUN[OU_EN_EST.ATTENTE], "lecture en cours");
+  assert.equal(CE_QUE_DIT_LETAT_DUN[OU_EN_EST.ECHOUE], "la lecture a échoué");
+
+  for (const ou of Object.values(OU_EN_EST)) {
+    if (ou === OU_EN_EST.JAMAIS) continue;
+    assert.ok(CE_QUE_DIT_LETAT_DUN[ou],
+      `« ${ou} » n'a pas de mot : sa pastille s'afficherait vide`);
+  }
+
+  assert.equal(CE_QUE_DIT_LETAT_DUN[OU_EN_EST.JAMAIS], undefined,
+    "« jamais » a un mot : il s'écrirait sur toutes les lignes d'un dossier neuf");
+});
+
+/**
+ * **Un pas qui a échoué porte l'état de l'échec**, et non celui de l'attente.
+ *
+ * C'est le service qui le décide, à partir de ce que la file écrit — et non
+ * l'écran, qui aurait eu à redécouvrir le mot « echoue ».
+ */
+test("un pas en échec sort de la file comme un échec", () => {
+  const sortis = lesDocumentsEnAttente([uneFile("rapports", [
+    { id: "d-1", nom: "A.pdf", ou: "attend" },
+    { id: "d-2", nom: "B.pdf", ou: "en-cours" },
+    { id: "d-3", nom: "C.pdf", ou: "echoue", motif: "le fichier est illisible" }
+  ])]);
+
+  const par = new Map(sortis.map((un) => [un.id, un]));
+  assert.equal(par.get("d-1").ou, OU_EN_EST.ATTENTE);
+  assert.equal(par.get("d-2").ou, OU_EN_EST.ATTENTE, "une lecture en cours attend bien");
+  assert.equal(par.get("d-3").ou, OU_EN_EST.ECHOUE,
+    "un échec est encore rangé avec ce qui attend : rien ne le reprendra pourtant");
+  assert.equal(par.get("d-3").motif, "le fichier est illisible");
 });

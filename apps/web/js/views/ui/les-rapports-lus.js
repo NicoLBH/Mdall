@@ -32,7 +32,7 @@ import {
   phraseDesRapportsLus
 } from "../../services/la-lecture-dun-rapport.js";
 import {
-  ceQueFaitLetape, lEtatDuParcours, phraseDesMarquesSansSens, phraseDuParcours
+  ceQueFaitLetape, lEtapeQuiReste, phraseDesMarquesSansSens, phraseDuParcours
 } from "../../services/le-parcours-dun-rapport.js";
 import {
   CE_QUE_LE_RAPPORT_APPORTE, LA_VIE_DUN_AVIS, phraseDeLaSuite
@@ -255,39 +255,37 @@ export function renderLaLectureEnCours(parcours = null) {
 }
 
 /**
- * Les trois étapes, et où l'on en est.
+ * Ce qui a coincé pendant la lecture — et **rien quand rien n'a coincé**.
  *
- * ## Pourquoi elles s'affichent même quand tout est fait
+ * ## Ce que cette section était, et pourquoi elle part
  *
- * C'est le procédé qu'on vient juger ici, pas seulement son résultat. Une lecture
- * dont la structure n'a pas été reconnue rend quand même du Markdown : sans cette
- * ligne, on relirait une transcription faite sans squelette en croyant lire une
- * transcription faite avec (règle 5).
+ * Elle dressait les trois étapes à chaque ouverture, cochées, avec leur coût et
+ * leur raison d'être. L'intention était bonne — c'est le procédé qu'on juge, pas
+ * seulement son résultat — mais le prix était un écran : trois paragraphes qu'on
+ * relit la première fois et qu'on saute les cent suivantes, en haut de la page,
+ * avant ce qu'on vient chercher.
+ *
+ * **Une lecture qui s'est bien passée n'a rien à raconter.** Ce qui mérite la
+ * place est ce qui n'a pas marché : une structure non reconnue change la façon
+ * de lire tout ce qui suit, et une étape manquante explique un vide plus bas.
+ *
+ * Ce que la section disait de juste reste donc, et seulement dans ce cas-là :
+ * `phraseDuParcours` nomme exactement ce qui manque, et c'est elle qu'on montre.
  */
-export function renderLesEtapesDuRapport(lecture = null, { enCours = "" } = {}) {
-  const etapes = lEtatDuParcours(lecture, { enCours });
+export function renderCeQuiACoince(lecture = null) {
+  const reste = lEtapeQuiReste(lecture);
+  const sansStructure = lecture?.sansStructure === true;
+
+  // **Rien à dire, donc rien à l'écran.** Un encart vert « tout va bien » est la
+  // forme la plus chère de silence (règle 12).
+  if (!reste && !sansStructure) return "";
 
   return `
-    <section class="rapport-etapes">
-      <p class="rapport-etapes__mot"><b>${escapeHtml(phraseDuParcours(lecture))}</b></p>
-      <ol class="rapport-etapes__liste">
-        ${etapes.map((une, rang) => `
-          <li class="rapport-etapes__pas${une.faite ? " est-faite" : ""}${
-            une.enCours ? " est-en-cours" : ""}${une.sautee ? " est-sautee" : ""}">
-            <span class="rapport-etapes__rang mono-small">${rang + 1}</span>
-            <span class="rapport-etapes__quoi">
-              <b>${escapeHtml(texte(une.titre))}</b>
-              <i>${escapeHtml(texte(une.ceQuelleFait))}</i>
-              <i class="rapport-etapes__pourquoi">${escapeHtml(texte(une.pourquoi))}</i>
-            </span>
-            <span class="rapport-etapes__etat mono-small">${escapeHtml(
-              une.sautee ? "non reconnue — la suite s'est faite sans elle"
-                : une.enCours ? "en cours…"
-                : une.faite ? "faite"
-                : texte(une.cout))}</span>
-          </li>
-        `).join("")}
-      </ol>
+    <section class="rapport-accroc">
+      <p class="rapport-accroc__mot">
+        ${svgIcon("alert", { className: "octicon" })}
+        <span>${escapeHtml(phraseDuParcours(lecture))}</span>
+      </p>
     </section>
   `;
 }
@@ -310,7 +308,7 @@ export function renderLaLegendeLue(lecture = null) {
 
   if (!legende.length) {
     return `
-      <section class="rapport-legende">
+      <section class="rapport-legende rapport-cadre">
         <h4 class="rapport-legende__titre">La légende</h4>
         <p class="forme-manques">${escapeHtml(
           lecture?.sansStructure === true
@@ -323,7 +321,7 @@ export function renderLaLegendeLue(lecture = null) {
   }
 
   return `
-    <section class="rapport-legende">
+    <section class="rapport-legende rapport-cadre">
       <h4 class="rapport-legende__titre">La légende</h4>
       <p class="rapport-legende__mot mono-small">${escapeHtml(
         phraseDesMarquesSansSens(lecture))}</p>
@@ -525,7 +523,7 @@ export function renderLeDetailDunRapport(vue = null, { onglet = "analyse" } = {}
 
   return `
     <div class="rapport-detail">
-      ${renderLesEtapesDuRapport(lecture)}
+      ${renderCeQuiACoince(lecture)}
       ${renderLaLegendeLue(lecture)}
       ${renderLesAvisReleves(lecture)}
       ${/*
@@ -559,10 +557,22 @@ export function renderLeDetailDunRapport(vue = null, { onglet = "analyse" } = {}
  * deux présentations : c'est la coquille qui est commune, et les faits qui sont
  * propres à la famille.
  */
-export function renderLidentiteDunRapport(vue = null) {
+export function renderLidentiteDunRapport(vue = null, { analyseLe = "" } = {}) {
   const lecture = vue?.lecture ?? null;
   const conservee = vue?.conservee ?? null;
   const mesures = lesMesuresDunRapport(lecture);
+
+  /**
+   * **Le jour de l'analyse est un fait du document.**
+   *
+   * Il occupait trois lignes en bandeau au-dessus de l'écran — « cette analyse
+   * ne se recalcule pas… ». Ce qu'il disait de juste tient dans un champ, à
+   * côté du fichier et des pages : c'est là qu'on regarde pour savoir ce qu'on a
+   * sous les yeux. Et il ne se confond pas avec « Émis le », qui est la date du
+   * rapport et non celle de sa lecture — les deux sont dans l'encart, côte à
+   * côte, ce qui est la seule façon de ne plus les mélanger.
+   */
+  const analysee = texte(analyseLe) || texte(conservee?.created_at);
 
   return renderLidentiteDunDocument({
     faits: [
@@ -578,7 +588,8 @@ export function renderLidentiteDunRapport(vue = null) {
         // **`null` n'est pas zéro.** « 0 avis » dit que le rapport n'en porte
         // aucun ; « non relevés » dit que l'étape n'a pas eu lieu (règle 5).
         valeur: mesures.avis === null ? "non relevés" : String(mesures.avis)
-      }
+      },
+      { quoi: "Analysé le", valeur: analysee.slice(0, 10) }
     ],
     reserve: !texte(lecture?.identite?.etabliLe) && !texte(conservee?.etabli_le)
       ? "La date d'émission n'a pas été lue : sans elle, ce rapport ne se place pas "

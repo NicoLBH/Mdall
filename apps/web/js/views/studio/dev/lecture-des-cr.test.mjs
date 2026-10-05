@@ -22,8 +22,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  leChantierAChange, matiereDuCompteRendu, renderLaLecture, reservesDeLaRestitution
+  leChantierAChange, lesEntreesDuChoix, matiereDuCompteRendu, renderLaLecture,
+  reservesDeLaRestitution
 } from "./lecture-des-cr.js";
+import { FAMILLE } from "../../../services/les-familles-de-document.js";
+import { OU_EN_EST } from "../../../services/les-documents-analyses.js";
 import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
 import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
 import { blocsAProposer } from "../../ui/mdall-de-la-proposition.js";
@@ -2169,6 +2172,90 @@ test("le choix et le dépôt ne se montrent jamais ensemble", () => {
 });
 
 /**
+ * **Ce qu'on sait d'un document voyage jusqu'à sa ligne du choix.**
+ *
+ * C'est au moment de cocher qu'on décide de dépenser : relancer ce qui est déjà
+ * analysé est un appel payé deux fois, et laisser de côté ce qui a **échoué** est
+ * un document qu'on croit lu. L'information est là, chargée pour le tableau juste
+ * derrière — la passer ne coûte rien, et ne pas la passer fait cocher à l'aveugle.
+ */
+test("les entrées du choix portent l'état d'analyse que l'écran connaît", () => {
+  const contenu = { files: [
+    { id: "d1", original_filename: "CR 01.pdf", storage_bucket: "d", storage_path: "p/1" },
+    { id: "d2", original_filename: "CR 02.pdf", storage_bucket: "d", storage_path: "p/2" },
+    { id: "d9", original_filename: "CR 09.pdf", storage_bucket: "d", storage_path: "p/9" }
+  ] };
+
+  const entrees = lesEntreesDuChoix(contenu, unEtat({
+    famille: FAMILLE.CR,
+    // Une lecture conservée pour `d1`…
+    dejaLus: [{ id: "l-1", document_id: "d1", titre: "CR 01", tenue_le: "2026-04-16" }],
+    dejaLusControles: [],
+    dejaLusMails: [],
+    // …et un pas de file en échec pour `d2`.
+    file: [{
+      id: "v-2", geste: FAMILLE.CR, statut: "en_cours",
+      cree_le: "2026-10-04T09:00:00Z",
+      avancement: { pas: [{
+        id: "d2", nom: "CR 02.pdf", ou: "echoue",
+        motif: "le document ne porte aucun texte"
+      }] }
+    }]
+  }));
+
+  const par = new Map(entrees.map((une) => [une.id, une]));
+  assert.equal(par.get("d1").ou, OU_EN_EST.ANALYSE);
+  assert.equal(par.get("d2").ou, OU_EN_EST.ECHOUE);
+  assert.equal(par.get("d2").motif, "le document ne porte aucun texte");
+
+  /**
+   * **Celui qu'on n'a jamais lancé est le cas ordinaire**, et c'est ce qu'on
+   * vient lancer. Il se dit par l'absence de badge, pas par un badge de plus.
+   */
+  assert.equal(par.get("d9").ou, OU_EN_EST.JAMAIS);
+  assert.equal(par.get("d9").motif, "");
+});
+
+/**
+ * **Rien de chargé n'est pas « rien d'analysé ».**
+ *
+ * Avant que les listes du tableau soient revenues, l'écran ne sait rien : dire
+ * « jamais analysé » de tout serait une réponse, et l'on relancerait des lectures
+ * déjà payées sur la foi d'un écran qui n'avait pas fini de charger (règle 5).
+ * Il ne reste alors qu'à ne rien dire — ce que fait l'absence de badge.
+ */
+test("sans les listes du tableau, le choix ne prétend rien savoir", () => {
+  const entrees = lesEntreesDuChoix({ files: [
+    { id: "d1", original_filename: "CR 01.pdf", storage_bucket: "d", storage_path: "p/1" }
+  ] }, unEtat({ famille: FAMILLE.CR }));
+
+  assert.equal(entrees[0].ou, OU_EN_EST.JAMAIS);
+});
+
+/**
+ * **La famille ouverte décide de ce qui se choisit.**
+ *
+ * Un `.eml` proposé sous « Bureau de contrôle » disait « Mdall ne sait pas lire
+ * ce format » — faux, et de la pire façon : on en concluait que le format n'était
+ * pas pris en charge, et l'on ne cherchait plus ailleurs (règle 5).
+ */
+test("le choix ne retient que ce que la famille ouverte sait lire", () => {
+  const contenu = { files: [
+    { id: "p1", original_filename: "CR.pdf", storage_bucket: "d", storage_path: "p/1" },
+    { id: "m1", original_filename: "echange.eml", storage_bucket: "d", storage_path: "p/2" }
+  ] };
+
+  const sousCr = new Map(lesEntreesDuChoix(contenu, unEtat({ famille: FAMILLE.CR }))
+    .map((une) => [une.id, une.choisissable]));
+  assert.equal(sousCr.get("p1"), true);
+  assert.equal(sousCr.get("m1"), false, "un mail se coche sous « comptes rendus »");
+
+  const sousMails = new Map(lesEntreesDuChoix(contenu, unEtat({ famille: FAMILLE.MAIL }))
+    .map((une) => [une.id, une.choisissable]));
+  assert.equal(sousMails.get("m1"), true, "un mail ne se coche pas sous « mails »");
+});
+
+/**
  * **Les cases à cocher n'existent que sur ce qui se lit.** Une case morte sur un
  * `.tiff` inviterait à cliquer pour rien ; et l'en-tête du dossier porte la
  * sienne, pour tout prendre d'un coup.
@@ -2396,7 +2483,17 @@ test("un bouton vert ouvre la zone, et il est à gauche de Transformer", () => {
   const html = renderLaLecture(unEtat({ dejaLus: [] }));
 
   assert.match(html, /data-lecture-cr-ouvrir-depot/);
-  assert.match(html, /gh-btn--success/, "le bouton qui ajoute n'est pas vert");
+  /**
+   * **Le vert plein, et non celui des messages d'information.**
+   *
+   * `gh-btn--success` est le fond pâle des encarts qui annoncent une réussite ;
+   * `gh-btn--primary` est le bouton vert de l'action principale, celui que tout
+   * le reste de l'application emploie — à commencer par « Lire 4 mails », deux
+   * centimètres plus bas sur le même écran (règle 4).
+   */
+  assert.match(html, /gh-btn--primary/, "le bouton qui ajoute n'est pas au vert plein");
+  assert.doesNotMatch(html, /gh-btn--success/,
+    "le bouton garde le vert pâle des messages d'information");
   assert.ok(html.indexOf("data-lecture-cr-ouvrir-depot") < html.indexOf("lectureCrTransformer"),
     "« + Documents » se dessine après Transformer");
 });
@@ -2993,15 +3090,27 @@ test("l'analyse d'un rapport porte ce que chaque avis est devenu", () => {
   assert.match(html, /suite-avis__frise/);
 });
 
-test("une analyse rouverte dit qu'elle ne se recalcule pas", () => {
-  // Elle le disait en une ligne grise — « Lue le 2026-10-02 » —, qui ne dit pas
-  // la chose qui compte : ce qu'on regarde est daté, et le restera (règle 6).
+/**
+ * **La date de l'analyse est un fait du document, pas un bandeau.**
+ *
+ * Elle occupait trois lignes en tête de l'écran — « Cette analyse est celle de la
+ * lecture, tenue le…, elle ne se recalcule pas… » —, au-dessus de ce qu'on vient
+ * chercher. Ce qu'elle disait de juste tient dans un champ de l'encart
+ * d'identité, à côté du fichier et des pages : c'est là qu'on regarde pour savoir
+ * ce qu'on a sous les yeux.
+ */
+test("la date de l'analyse est dans l'encart, et non en bandeau", () => {
   const html = renderLaLecture(unEtat({
     famille: "rapports", ouvertAilleurs: UN_RAPPORT_OUVERT
   }));
 
-  assert.match(html, /lecture-cr__photo/);
-  assert.match(html, /ne se recalcule pas/);
+  assert.doesNotMatch(html, /lecture-cr__photo/,
+    "le bandeau de la photographie est encore là");
+  assert.doesNotMatch(html, /Ce que les rapports suivants en ont fait/);
+
+  // La date, elle, reste — dans l'encart.
+  assert.match(html, /document-identite/);
+  assert.match(html, /Analysé le/);
   assert.match(html, /2026-10-02/);
 });
 

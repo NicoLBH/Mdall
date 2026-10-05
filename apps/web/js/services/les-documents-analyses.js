@@ -186,23 +186,61 @@ export function lesDocumentsAnalyses({ mails = [], controles = [], crs = [] } = 
 /* ── Ce qui a été lancé, et qui n'est pas revenu ─────────────────────────── */
 
 /**
- * Où en est un document du tableau.
+ * Où en est un document.
  *
- * **Deux états, et non un drapeau.** « Analysé » et « en attente » se comptent,
- * se filtrent et se disent chacun avec ses mots ; un booléen `analyse` aurait
- * forcé chaque lecteur à inventer le nom de l'autre cas (règle 10).
+ * **Quatre états, et non un drapeau.** Chacun se compte, se filtre et se dit
+ * avec ses mots ; un booléen `analyse` aurait forcé chaque lecteur à inventer le
+ * nom des autres cas (règle 10).
+ *
+ * ## Pourquoi « échoué » est un état et non une variante d'« en attente »
+ *
+ * Ils appelaient le même mot et n'appellent pas le même geste : une lecture qui
+ * attend n'a besoin de rien, une lecture qui a échoué ne reviendra jamais toute
+ * seule. Fondus, le second se cachait derrière le premier — on regardait
+ * « 3 en attente » en croyant que le serveur y travaillait.
+ *
+ * ## Et pourquoi « jamais » existe
+ *
+ * Il ne se déduit d'aucune table : c'est **l'absence** des deux autres, et seul
+ * un écran qui énumère un dossier peut la constater. Le tableau des documents
+ * analysés ne le rencontre donc jamais ; le choix depuis Fichiers, si — et c'est
+ * là qu'on en a besoin, au moment de décider quoi lancer.
  */
 export const OU_EN_EST = {
   /** La lecture est faite, et se rouvre. */
   ANALYSE: "analyse",
-  /** Elle a été lancée et n'est pas revenue — ou elle a échoué. */
-  ATTENTE: "attente"
+  /** Elle a été lancée, et n'est pas encore revenue. */
+  ATTENTE: "attente",
+  /** Elle est revenue sans aboutir. Rien ne la reprendra sans un geste. */
+  ECHOUE: "echoue",
+  /** Elle n'a jamais été lancée. */
+  JAMAIS: "jamais"
 };
 
 /** Ce que l'écran écrit sur la pastille de chaque état. */
 export const CE_QUE_DIT_LETAT = {
   [OU_EN_EST.ANALYSE]: "Analysés",
-  [OU_EN_EST.ATTENTE]: "En attente"
+  [OU_EN_EST.ATTENTE]: "En attente",
+  [OU_EN_EST.ECHOUE]: "En échec",
+  [OU_EN_EST.JAMAIS]: "Jamais analysés"
+};
+
+/**
+ * Ce qu'on dit d'un document dans le choix depuis Fichiers, au singulier.
+ *
+ * Les pastilles du tableau comptent ; ici on qualifie **une** ligne, et le mot
+ * doit tenir à côté d'un nom de fichier.
+ *
+ * **`JAMAIS` n'a pas d'entrée, et c'est l'énoncé.** Dans un dossier qu'on ouvre
+ * pour la première fois, n'avoir jamais été analysé est le cas de toutes les
+ * lignes : un mot sur chacune n'apprendrait rien et cacherait les trois qui
+ * comptent. L'absence de clé dit donc « rien à écrire ici », et c'est aussi là
+ * que tombe un état que le serveur nommerait demain sans qu'on le sache encore.
+ */
+export const CE_QUE_DIT_LETAT_DUN = {
+  [OU_EN_EST.ANALYSE]: "déjà analysé",
+  [OU_EN_EST.ATTENTE]: "lecture en cours",
+  [OU_EN_EST.ECHOUE]: "la lecture a échoué"
 };
 
 /** Ce qu'un pas de la file dit de lui-même, quand il n'est pas encore lu. */
@@ -276,7 +314,12 @@ export function lesDocumentsEnAttente(lignes = []) {
         documentId: id,
         propositionId: "",
         combien: 0,
-        ou: OU_EN_EST.ATTENTE,
+        /**
+         * **Un échec n'attend pas**, il s'est arrêté. Les deux tombaient dans
+         * « en attente » : on lisait « 3 en attente » en croyant que le serveur
+         * y travaillait, alors que rien ne reprendrait sans un geste (règle 5).
+         */
+        ou: texte(une?.ou) === "echoue" ? OU_EN_EST.ECHOUE : OU_EN_EST.ATTENTE,
         /** Pourquoi la lecture n'a pas abouti, quand elle a échoué. */
         motif: texte(une?.motif)
       });
@@ -331,10 +374,18 @@ export function parEtat(documents = [], ou = "") {
  * dessus en rendrait trois.
  */
 export function lesComptesParEtat(documents = []) {
-  return {
-    [OU_EN_EST.ATTENTE]: parEtat(documents, OU_EN_EST.ATTENTE).length,
-    [OU_EN_EST.ANALYSE]: parEtat(documents, OU_EN_EST.ANALYSE).length
-  };
+  /**
+   * **Dérivés du domaine**, et non écrits un par un : un état ajouté là-haut et
+   * oublié ici ferait une pastille qui ne compte rien, et l'on croirait qu'il
+   * n'y a rien à compter (règle 10).
+   *
+   * `JAMAIS` n'en est pas : le tableau ne liste que ce qui a une trace, et un
+   * document jamais lancé n'en a aucune. C'est le choix depuis Fichiers qui le
+   * rencontre, parce que lui énumère un dossier.
+   */
+  return Object.fromEntries(Object.values(OU_EN_EST)
+    .filter((ou) => ou !== OU_EN_EST.JAMAIS)
+    .map((ou) => [ou, parEtat(documents, ou).length]));
 }
 
 /** Ceux d'une famille, ou tous. */

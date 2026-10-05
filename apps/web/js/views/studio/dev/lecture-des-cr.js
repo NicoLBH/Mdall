@@ -820,6 +820,37 @@ function lesDocumentsDeLaVue(vue) {
 }
 
 /**
+ * Les entrées du choix, **avec ce que l'écran sait déjà de chaque document**.
+ *
+ * ## Pourquoi c'est une fonction, et non trois appels dans le gestionnaire
+ *
+ * Le branchement vivait au milieu de `ouvrirLeChoix`, entre un `await import`
+ * et un `try`. Rien ne pouvait l'éprouver sans navigateur : la batterie de
+ * mutations a coupé le troisième argument — l'écran se remettait à choisir à
+ * l'aveugle — et aucun test n'est tombé. Un câblage qu'on ne peut pas casser
+ * exprès n'est pas gardé.
+ *
+ * Les lectures conservées et les lignes de file sont déjà chargées pour le
+ * tableau, juste derrière cette liste. Les redemander aurait fait un
+ * aller-retour de plus pour une information qu'on a sous la main ; ne pas les
+ * passer laissait cocher à l'aveugle — c'est ce qu'on ferme.
+ *
+ * @param {object|null} contenu ce que la lecture du dossier a rendu
+ * @param {object} vue l'état de l'écran, qui porte les lectures et la file
+ */
+export function lesEntreesDuChoix(contenu = null, vue = etat) {
+  // **La famille ouverte décide de ce qui se choisit.** Un `.eml` proposé sous
+  // « Bureau de contrôle » disait « Mdall ne sait pas lire ce format » — faux,
+  // et de la pire façon : on en concluait que le format n'était pas pris en
+  // charge, et l'on ne cherchait plus ailleurs (règle 5).
+  //
+  // **La même liste que le tableau**, et non une seconde composition : c'est
+  // elle qui mêle les lectures conservées aux lignes de file, et qui sait déjà
+  // qu'un échec n'est pas une attente (règle 4).
+  return entreesDuDossier(contenu, vue?.famille, lesDocumentsDeLaVue(vue ?? {}));
+}
+
+/**
  * Ce qui vient d'être lancé, dit **une fois et quelle que soit la famille**.
  *
  * ## Il était dans la porte des comptes rendus
@@ -971,7 +1002,6 @@ function renderUnDocumentDuneAutreFamille(vue) {
       */""}
       ${renderEntete(vue)}
       <section class="lecture-cr__ailleurs">
-        ${renderLaPhotographieDuDocument(ouvert)}
         ${ouvert?.famille === FAMILLE.MAIL
           ? renderLeDetailDunFil(ouvert?.vue)
           : renderLeDetailDunRapportDansSaCoquille(vue, ouvert)}
@@ -979,29 +1009,6 @@ function renderUnDocumentDuneAutreFamille(vue) {
         </div>
       </div>
     </div>
-  `;
-}
-
-/**
- * Le bandeau qui dit qu'une analyse ne se recalcule pas.
- *
- * **Le même que celui d'un compte rendu rouvert.** Il était écrit en petit, sous
- * le titre, en une ligne grise — « Lue le 2026-10-02 » —, et ne disait pas la
- * chose qui compte : que ce qu'on regarde est daté, et le restera (règle 6).
- */
-function renderLaPhotographieDuDocument(ouvert) {
-  const quand = texte(ouvert?.lueLe).slice(0, 10);
-  if (!quand) return "";
-
-  return `
-    <p class="lecture-cr__photo">
-      ${svgIcon("history", { className: "octicon" })}
-      <span>
-        Cette analyse est celle de la lecture, tenue le ${escapeHtml(quand)}.
-        <strong>Elle ne se recalcule pas</strong> : elle dit ce qui a été vu ce
-        jour-là. Ce que les rapports suivants en ont fait se lit en dessous.
-      </span>
-    </p>
   `;
 }
 
@@ -1033,7 +1040,7 @@ function renderLeDetailDunRapportDansSaCoquille(vue, ouvert) {
   const ici = vue.onglet === ONGLET.RESTITUTION ? ONGLET.RESTITUTION : ONGLET.ANALYSE;
 
   return `
-    ${renderLidentiteDunRapport(laVue)}
+    ${renderLidentiteDunRapport(laVue, { analyseLe: texte(ouvert?.lueLe) })}
     <nav class="light-tabs lecture-cr__onglets" aria-label="Ce que la lecture a produit">
       ${[ONGLET.RESTITUTION, ONGLET.ANALYSE].map((cle) => `
         <button type="button" class="light-tabs__item${ici === cle ? " is-active" : ""}"
@@ -1138,7 +1145,14 @@ function renderEntete(vue = etat) {
              * lire, et il faudrait d'abord en sortir.
              */
             vue.conservee || vue.ouvertAilleurs || vue.fichier ? "" : `
-              <button type="button" class="gh-btn gh-btn--sm gh-btn--success"
+              ${/*
+                **Le vert plein, et non celui des messages d'information.**
+                `gh-btn--success` est le fond pâle des encarts qui annoncent une
+                réussite ; `gh-btn--primary` est le bouton vert que tout le reste
+                de l'application emploie pour l'action principale d'un écran —
+                celui de « Lire 4 mails », deux centimètres plus bas.
+              */""}
+              <button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
                 ${OUVRIR_LE_DEPOT} aria-expanded="${vue.depotOuvert === true}">
                 ${svgIcon("plus", { className: "octicon" })} Documents
               </button>`}
@@ -3663,11 +3677,7 @@ async function ouvrirLeChoix(hote, dossierId = "") {
     const { listDocumentDirectory } = await import("../../../services/project-supabase-sync.js");
     const contenu = await listDocumentDirectory(projectId, texte(dossierId) || null);
 
-    // **La famille ouverte décide de ce qui se choisit.** Un `.eml` proposé sous
-    // « Bureau de contrôle » disait « Mdall ne sait pas lire ce format » — faux,
-    // et de la pire façon : on en concluait que le format n'était pas pris en
-    // charge, et l'on ne cherchait plus ailleurs (règle 5).
-    const entrees = entreesDuDossier(contenu, etat.famille);
+    const entrees = lesEntreesDuChoix(contenu, etat);
     // **Ce qu'on a vu reste su.** La barre de lancement doit dire combien de PDF
     // la file contient ; un document coché dans un dossier qu'on a quitté n'est
     // plus dans `entrees`, et sans cette mémoire le coût annoncé aurait baissé

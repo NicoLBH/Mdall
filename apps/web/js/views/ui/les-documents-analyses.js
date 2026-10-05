@@ -206,7 +206,13 @@ export function renderLeTableauDesDocuments({
 function renderLesPastillesDuFiltre(comptes, filtre = "") {
   return `
     <span class="documents-analyses__filtre" role="group" aria-label="Filtrer par état">
-      ${[OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE].map((ou) => {
+      ${/*
+        **Un échec a sa pastille**, et ne se cache plus derrière « en attente ».
+        Les deux n'appellent pas le même geste : ce qui attend n'a besoin de
+        rien, ce qui a échoué ne reviendra jamais tout seul. Fondus, on lisait
+        « 3 en attente » en croyant que le serveur y travaillait (règle 5).
+      */""}
+      ${[OU_EN_EST.ECHOUE, OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE].map((ou) => {
         const actif = texte(filtre) === ou;
         return `
           <button type="button"
@@ -239,7 +245,10 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
   const ouvert = texte(ouverte) && texte(ouverte) === texte(document?.id);
   const ce = ceQueDitLaFamille(document?.famille);
   const melange = texte(famille) === TOUTES;
-  const attend = (document?.ou ?? OU_EN_EST.ANALYSE) === OU_EN_EST.ATTENTE;
+  // **Attendre et avoir échoué se disent autrement, et s'ouvrent pareil :**
+  // ni l'un ni l'autre n'a d'analyse à montrer.
+  const ou = texte(document?.ou) || OU_EN_EST.ANALYSE;
+  const attend = ou !== OU_EN_EST.ANALYSE;
 
   return `
     <div class="data-table-shell__row documents-analyses__ligne${ouvert ? " est-ouverte" : ""}${
@@ -298,14 +307,34 @@ function renderUnDocumentAnalyse(document, { ouverte = "", famille = TOUTES } = 
  * ce qu'on attend encore.
  */
 function renderLeBadgeDeLetat(document) {
-  const attend = (document?.ou ?? OU_EN_EST.ANALYSE) === OU_EN_EST.ATTENTE;
+  const ou = texte(document?.ou) || OU_EN_EST.ANALYSE;
 
-  return `<span class="documents-analyses__badge documents-analyses__badge--${
-    attend ? "attente" : "analyse"}" title="${escapeHtml(attend
-      ? texte(document?.motif) || "Cette lecture a été lancée et n'est pas revenue"
-      : "L'analyse est conservée : cliquer sur le titre la rouvre")}"
-  >${svgIcon(attend ? "history" : "check-circle", { className: "octicon" })}${
-    escapeHtml(attend ? "En attente" : "Analysé")}</span>`;
+  /**
+   * **Trois tons, parce qu'il y a trois gestes.** Bleu pour ce qui est fait et
+   * se rouvre, attention pour ce qu'on attend encore, danger pour ce qui s'est
+   * arrêté — celui-là seul demande qu'on relance.
+   */
+  const ce = {
+    [OU_EN_EST.ANALYSE]: {
+      ton: "analyse", icone: "check-circle", dit: "Analysé",
+      pourquoi: "L'analyse est conservée : cliquer sur le titre la rouvre"
+    },
+    [OU_EN_EST.ATTENTE]: {
+      ton: "attente", icone: "history", dit: "En attente",
+      pourquoi: "Cette lecture a été lancée et n'est pas revenue"
+    },
+    [OU_EN_EST.ECHOUE]: {
+      ton: "echoue", icone: "alert", dit: "En échec",
+      pourquoi: "Cette lecture s'est arrêtée : rien ne la reprendra sans un geste"
+    }
+  }[ou] ?? {
+    ton: "analyse", icone: "check-circle", dit: "Analysé",
+    pourquoi: "L'analyse est conservée"
+  };
+
+  return `<span class="documents-analyses__badge documents-analyses__badge--${ce.ton}"
+    title="${escapeHtml(texte(document?.motif) || ce.pourquoi)}"
+  >${svgIcon(ce.icone, { className: "octicon" })}${escapeHtml(ce.dit)}</span>`;
 }
 
 /**
