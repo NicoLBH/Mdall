@@ -276,9 +276,9 @@ sur un échantillon), et chaque survivant est un défaut réel.
 
 | | État |
 | --- | --- |
-| 1. Les invariants, agrégés | **commencé** — deux posés, dans la batterie |
+| 1. Les invariants, agrégés | **faits** — deux posés, et ils tournent sur tout ce qui est en base |
 | 2. La batterie de perturbations | **faite**, six perturbations · `docs/la-batterie-des-perturbations.md` |
-| 3. La dérive contre les analyses gelées | pas commencé |
+| 3. La dérive contre les analyses gelées | **faite** · `docs/la-derive-des-analyses.md` |
 | 4. Le jeu de référence | pas commencé |
 | 5. La ligne du temps | pas commencé |
 
@@ -298,3 +298,30 @@ défaut fabriqué.
 Ce qui reste est dit au bout de son document : le lecteur du serveur n'a jamais
 tourné pour de vrai, seuls les rapports de contrôle y passent, et rien n'est
 encore suivi dans le temps.
+
+### La dérive, et ce qu'elle a révélé en chemin
+
+Le point 3 annonçait « relire les mêmes documents avec la consigne du jour et
+comparer au gelé ». Il s'est avéré qu'**il n'y avait rien à relire** : la
+migration des lectures conservées écrit une ligne par lecture, jamais mise à
+jour, et son propre commentaire disait déjà pourquoi — « relire le même rapport
+est une seconde lecture, avec sa propre ligne, et c'est précisément ce qu'on veut
+comparer quand on ajuste une consigne ».
+
+La dérive se **lit** donc dans ce qui est en base, sans un appel au modèle. Ce
+qui change tout : un indicateur gratuit se regarde souvent, et un indicateur
+qu'on ne regarde pas ne sert à rien.
+
+Elle a aussi fait apparaître une distinction que le point 3 n'avait pas vue.
+`lu_par` porte le modèle **et la version du procédé**, et le même écart ne dit
+donc pas la même chose selon qu'il a changé :
+
+* procédé changé, relevé changé → une **dérive**, attendue : reste à la vouloir ;
+* **même procédé**, relevé changé → une **instabilité**, qui est un défaut en soi.
+  Rien ne se conclut d'une mesure qui ne se répète pas ;
+* procédé non dit → l'outil **ne tranche pas**, plutôt que d'accuser sans preuve.
+
+Et les invariants du point 1 sont venus avec, sans rien coûter : le Markdown est
+gelé avec l'analyse, ils se posent donc sur chaque lecture conservée. Le point 1
+était à écrire en premier sur le papier ; il s'est trouvé livré en troisième,
+parce qu'il n'avait nulle part où s'afficher avant qu'un outil lise un corpus.

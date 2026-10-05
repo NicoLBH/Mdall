@@ -36,7 +36,7 @@ import {
 } from "./la-batterie-des-perturbations/un-lecteur-de-carton.js";
 import {
   parLeReseau, unLecteurDuServeur
-} from "./la-batterie-des-perturbations/un-lecteur-du-serveur.js";
+} from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const LA_MARQUE = { [VERDICT.TIENT]: " ✓ ", [VERDICT.TOMBE]: " ✗ ", [VERDICT.SANS_OBJET]: " · " };
