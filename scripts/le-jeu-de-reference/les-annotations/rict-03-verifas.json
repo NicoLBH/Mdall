@@ -1,0 +1,31 @@
+{
+  "document": "rict-03-verifas.md",
+  "famille": "rapports",
+  "ecritePar": "du document, à la main, sans lire ce que le modèle rend",
+  "structureReconnue": true,
+  "legende": ["F", "D", "S", "SO"],
+  "releve": [
+    { "reference": "A-07", "marque": "F", "intitule": "Désenfumage du hall d'accueil" },
+    { "reference": "A-12", "marque": "D", "intitule": "Source auxiliaire 48 Volts poste de transformation" },
+    { "reference": "A-23", "marque": "S", "intitule": "Stabilité au feu des poteaux du préau" },
+    { "reference": "A-55", "marque": "SO", "intitule": "Trappe de visite du vide sanitaire" }
+  ],
+  "pieges": [
+    {
+      "quoi": "l'accessibilité des locaux techniques du niveau R-1",
+      "pourquoi": "C'est une observation générale, sans référence ni marque. La relever en ferait un cinquième avis qui n'existe pas — et le document dit explicitement que cette absence ne vaut pas avis favorable, ce qui est le genre de phrase qu'une lecture pressée transforme en « F »."
+    },
+    {
+      "quoi": "la coordination entre le lot électricité et le lot désenfumage",
+      "pourquoi": "Même chose : une observation de fin de rapport, sans ligne dans le tableau. Elle ressemble à un avis défavorable parce qu'elle signale un manque, et c'en est précisément un piège."
+    },
+    {
+      "quoi": "RICT-02",
+      "pourquoi": "Le rapport précédent est cité dans l'introduction — « annule et remplace le rapport RICT-02 ». C'est une référence de document, pas une référence d'avis : la prendre pour un relevé ajouterait un avis au nom d'un rapport entier."
+    },
+    {
+      "quoi": "F, D, S, SO comme relevés",
+      "pourquoi": "Les quatre lignes du tableau de légende ont la même forme qu'un relevé : une première colonne courte, une seconde qui l'explique. Une lecture qui ne distingue pas la légende du corps rendrait quatre avis nommés « F », « D », « S » et « SO »."
+    }
+  ]
+}

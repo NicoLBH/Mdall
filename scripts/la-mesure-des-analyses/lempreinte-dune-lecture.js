@@ -70,8 +70,20 @@ const LA_PROJECTION = {
 
   /**
    * Un point de compte rendu. C'est `etat` qui porte le verdict — « en cours »,
-   * « soldé » —, et les libellés de rubrique tiennent lieu de légende : ce sont
-   * eux qu'un point désigne sans les redire.
+   * « soldé ».
+   *
+   * ## Et **aucune légende**, ce qui est le vrai énoncé
+   *
+   * Les libellés de rubrique y tenaient lieu de légende. C'était faux, et le jeu
+   * de référence l'a fait apparaître : une **légende** est la table qui déclare
+   * le sens des marques, et l'invariant « toute marque employée est déclarée »
+   * s'appuie dessus. Les rubriques d'un compte rendu ne déclarent rien de ses
+   * états — ce sont deux classements sans rapport, et les confondre faisait
+   * tomber l'invariant sur chaque point d'un compte rendu parfaitement lu.
+   *
+   * **Un compte rendu ne déclare pas le sens de ses états.** C'est un fait du
+   * document, pas un manque de la lecture : l'invariant ne se pose donc pas, et
+   * `les-invariants.js` sait déjà le dire.
    */
   [FAMILLE.CR]: (lecture) => ({
     releve: liste(lecture?.points).map((un) => ({
@@ -81,8 +93,7 @@ const LA_PROJECTION = {
       constat: texte(un?.description),
       citation: texte(un?.citation)
     })),
-    legende: liste(lecture?.rubriques).map((une) => texte(une?.titre ?? une?.libelle))
-      .filter(Boolean),
+    legende: [],
     sansStructure: lecture?.sansStructure === true,
     ecartes: Number(lecture?.ecartes) || 0
   })
