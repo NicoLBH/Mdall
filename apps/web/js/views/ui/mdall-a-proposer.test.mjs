@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { blocsAProposer } from "./mdall-de-la-proposition.js";
+import { blocsAProposer, blocsDeLaProposition } from "./mdall-de-la-proposition.js";
 import {
   SOUS_LE_TITRE, partDeLaProposition, phraseDeLaPart, renderBlocsMdall, renderMdallAProposer
 } from "./mdall-a-proposer.js";
@@ -332,4 +332,153 @@ test("l'intendance ne passe pas par l'écrivain : elle n'a pas de Mdall", () => 
     payload: { subject: "Altitude du site", value: "890 m", nature: NATURE.DONNEE_BASE }
   }], {});
   assert.deepEqual(blocs.map((un) => un.sujet), ["Altitude du site"]);
+});
+
+/* ── Les quatre crans de la traduction ───────────────────────────────────── */
+
+/**
+ * **Le panneau montre la chaîne, et non une pile de blocs.**
+ *
+ * C'est le défaut D2 du plan : on voyait le PDF, puis du Mdall, et les quatre
+ * crans entre les deux n'étaient nommés nulle part. La transcription avait
+ * l'air d'un tour de magie — et un tour de magie n'est pas rassurant.
+ */
+test("les blocs se rangent sous les quatre crans, nommés et numérotés", () => {
+  const html = renderBlocsMdall(blocsAProposer([UNE_VALEUR, UNE_REGLE], {}));
+
+  for (const [rang, libelle] of [
+    [1, "Les données"], [2, "Les contraintes"],
+    [3, "Les fonctions"], [4, "Les chemins entre fonctions"]
+  ]) {
+    assert.ok(html.includes(`${rang}. ${libelle}`), `le cran « ${libelle} » n'est pas nommé`);
+  }
+
+  // Chaque cran porte sa question : sans elle, un titre n'explique rien.
+  assert.match(html, /Qu&#39;est-ce que ce document affirme/);
+  assert.match(html, /Quelle règle, souvent implicite/);
+});
+
+test("une règle va au cran des fonctions, une valeur à celui des données", () => {
+  const html = renderBlocsMdall(blocsAProposer([UNE_VALEUR, UNE_REGLE], {}));
+
+  // Le sujet de la règle doit apparaître **après** le titre du cran 3, et celui
+  // de la valeur après le titre du cran 1. Comparer les positions est la seule
+  // façon de vérifier un rangement sur du HTML.
+  const ou = (quoi) => html.indexOf(quoi);
+  assert.ok(ou("1. Les données") < ou("Altitude du site"));
+  assert.ok(ou("Altitude du site") < ou("3. Les fonctions"));
+  assert.ok(ou("3. Les fonctions") < ou("Classement du bâtiment"));
+});
+
+/**
+ * **Un cran vide se nomme**, et c'est la règle qui fait tout l'intérêt du
+ * groupement : sans elle, grouper ne déplacerait que des cartes.
+ */
+test("un cran sans bloc dit ce que son absence veut dire", () => {
+  const html = renderBlocsMdall(blocsAProposer([UNE_VALEUR], {}));
+
+  // Ni contrainte ni fonction dans ce dépôt : les deux crans restent, avec leur
+  // phrase. Un groupe absent se lirait « cela va de soi ».
+  assert.match(html, /Ce document n&#39;apporte aucune contrainte/);
+  assert.match(html, /Aucune règle n&#39;a été relevée ici/);
+  assert.match(html, /Aucune fonction n&#39;emploie ce qu&#39;une autre conclut/);
+});
+
+test("un chemin entre deux fonctions se lit en une phrase", () => {
+  // La règle d'incendie lit « Hauteur du dernier plancher ». On en ajoute une
+  // seconde qui conclut ce nom-là : le chemin apparaît, et c'est le cran 4.
+  const amont = {
+    sujet: "Hauteur du dernier plancher",
+    valeur: "26 m",
+    referentiel: true,
+    domaine: "incendie",
+    regle: {
+      conditions: [{ sujet: "Altitude du site", operateur: ">", valeur: ["0"], unite: "m" }],
+      sinon: "", sauf: []
+    },
+    provenance: { type: PROVENANCE.TEXTE, quoi: "arrêté du 31 janvier 1986" },
+    statut: STATUT.RETENU,
+    zones: []
+  };
+
+  const html = renderBlocsMdall(blocsAProposer([amont, UNE_REGLE], {}));
+
+  assert.match(html, /4\. Les chemins entre fonctions/);
+  assert.match(html,
+    /« Classement du bâtiment » emploie « Hauteur du dernier plancher »/);
+  assert.match(html, /que « Hauteur du dernier plancher » conclut/);
+});
+
+/**
+ * **Les blocs sans cran se montrent, et sous leur propre titre.**
+ *
+ * Une ligne refusée en revue, une affirmation retirée, une ligne dont la mémoire
+ * n'a pas pu être lue : elles portent `sansBloc`, donc aucun code, donc aucun
+ * cran. Les fondre dans « les données » les ferait compter dans un groupe qui
+ * annonce ce que la mémoire écrira — alors qu'elles sont exactement ce qu'elle
+ * n'écrira pas.
+ *
+ * La batterie de mutations a trouvé le trou : faire disparaître cette section
+ * ne faisait tomber aucune épreuve, parce qu'aucune n'en rendait une.
+ */
+test("un bloc sans code se montre sous « Le reste », et non dans un cran", () => {
+  const refusee = blocsDeLaProposition([{
+    cle: "type-de-couverture",
+    sujet: "Type de couverture",
+    changement: "nouveau",
+    refusee: true,
+    porteur: {
+      item_key: "Type de couverture", nature: "constat",
+      payload: { subject: "Type de couverture", value: "tuiles", nature: "constat" }
+    }
+  }]);
+
+  const html = renderBlocsMdall(refusee);
+
+  assert.match(html, /Le reste/, "un bloc sans code disparaît de l'écran");
+  assert.match(html, /Qu&#39;est-ce que la lecture n&#39;a pas su ranger/);
+  // Et il ne compte pas dans les données : le cran 1 reste vide et le dit.
+  assert.match(html, /Ce document n&#39;affirme aucune valeur/);
+  assert.match(html, /1 bloc dont le cran n&#39;est pas déterminé/);
+  // La phrase du refus vient du registre partagé, pas d'ici.
+  assert.match(html, /Refusée pendant la revue/);
+});
+
+test("la phrase du haut compte par cran, et ne fond rien", () => {
+  const html = renderBlocsMdall(blocsAProposer([UNE_VALEUR, UNE_REGLE], {}));
+  // « 2 blocs » seul ne dirait pas ce qui a été compris : une donnée et une
+  // fonction, ce n'est pas deux données.
+  assert.match(html, /1 donnée · 1 fonction/);
+  assert.doesNotMatch(html, /2 blocs/);
+});
+
+/**
+ * **Aucune classe neuve.**
+ *
+ * > « Il faut mutualiser ces classes, c'est pénible sinon de toujours tout
+ * >   recalibrer entre les différents écrans. »
+ *
+ * Les crans reprennent `forme-suite`, qui donne déjà la forme — une colonne, un
+ * filet en haut, un titre. L'épreuve relève **toutes** les classes du rendu et
+ * les confronte à celles de la feuille de style : une classe inventée pour un
+ * cran ne se verrait autrement qu'à l'œil, sur un écran qu'on n'ouvre pas tous
+ * les jours.
+ */
+test("les crans n'inventent aucune classe", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const style = readFileSync(
+    fileURLToPath(new URL("../../../style.css", import.meta.url)), "utf8");
+
+  const html = renderBlocsMdall(blocsAProposer([UNE_VALEUR, UNE_REGLE], {}));
+  const classes = new Set([...html.matchAll(/class="([^"]+)"/g)]
+    .flatMap((un) => un[1].split(/\s+/))
+    .filter(Boolean));
+
+  assert.ok(classes.size >= 8, `trop peu de classes relevées : ${[...classes].join(" ")}`);
+  for (const classe of classes) {
+    assert.ok(style.includes(`.${classe}`),
+      `« ${classe} » n'est pas dans la feuille de style : il faudrait la recalibrer à la main`);
+  }
 });

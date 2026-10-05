@@ -176,10 +176,49 @@ test("une ligne refusée qui demandait un retrait reste un retrait", () => {
 });
 
 test("sans objet à écrire, on ne fabrique pas de bloc", () => {
+  /**
+   * **Le `deepEqual` est volontairement entier.** Il dit la forme exacte d'un
+   * bloc, et c'est lui qui a imposé de déclarer les quatre champs du cran
+   * jusque sur un bloc sans code : `nature: ""`, `regle: false`, `lit: []`,
+   * `produit: []`.
+   *
+   * C'est la bonne forme. Les laisser absents ici aurait fait deux formes de
+   * bloc selon qu'il porte du code ou non, et l'écran aurait lu `bloc.lit`
+   * tantôt sur un tableau, tantôt sur `undefined` — qui ne se parcourt pas.
+   */
   assert.deepEqual(blocsDeLaProposition([{ cle: "x", sujet: "X", changement: "nouveau" }]), [{
-    cle: "x", sujet: "X", changement: "nouveau", fichier: "", lignes: [], sansBloc: SANS_BLOC.RIEN
+    cle: "x", sujet: "X", changement: "nouveau", fichier: "", lignes: [],
+    sansBloc: SANS_BLOC.RIEN, nature: "", regle: false, lit: [], produit: []
   }]);
   assert.deepEqual(blocsDeLaProposition(null), []);
+});
+
+/**
+ * **Le cran se lit sur la charge, et non sur le rendu.**
+ *
+ * Une règle versée n'a pas de nature et porte le `kind` d'une donnée de base.
+ * Si ces quatre champs n'étaient pas posés ici, l'écran devrait reconnaître une
+ * règle à la présence d'une ligne `regle` dans son code — ce qui marche jusqu'au
+ * jour où l'écrivain change une ligne de forme.
+ */
+test("un bloc porte sa nature, sa qualité de règle, et ce qu'il relie", () => {
+  const [valeur] = blocs([
+    item("Altitude du site", "890 m", { nature: "donnee-de-base", declared: true })
+  ]);
+  assert.equal(valeur.nature, "donnee-de-base");
+  assert.equal(valeur.regle, false);
+  assert.deepEqual(valeur.produit, ["Altitude du site"]);
+
+  const [regle] = blocs([
+    item("Degré coupe-feu", "CF 1 h", {
+      domain: "incendie",
+      referentiel: true,
+      regle: { conditions: [{ sujet: "Famille du bâtiment", operateur: "=", valeur: ["3e famille B"] }] }
+    })
+  ]);
+  assert.equal(regle.regle, true, "`estUneRegle` ne voit plus la règle : le cran la rangerait en donnée");
+  assert.deepEqual(regle.lit, ["Famille du bâtiment"]);
+  assert.deepEqual(regle.produit, ["Degré coupe-feu"]);
 });
 
 /* ── Où le bloc ira, et ce qu'on ouvre tout seul ─────────────────────────── */

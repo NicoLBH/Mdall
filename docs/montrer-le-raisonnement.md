@@ -85,13 +85,30 @@ c'est *exactement* ce que l'utilisateur doit comprendre pour dire « wahoo, je
 comprends ». Sans les crans, la transcription a l'air d'un tour de magie, et un
 tour de magie n'est pas rassurant : il est inquiétant.
 
-**D3 — On ne voit le Mdall qu'au moment de signer.** Au moment de l'analyse,
-quand on n'a encore rien engagé, on voit des avis relevés et des indicateurs —
-pas le code qui serait versé. C'est le moment le plus pédagogique de tous, parce
-que c'est le moment sans enjeu, et il est vide. Et c'est la demande explicite :
-*« avant d'envisager une proposition, on a envie de voir aussi les
-vérifications, et le code qui sera versé si jamais on décide d'en faire une
-proposition. »*
+**D3 — Le Mdall au moment de l'analyse : il existe, et il manque là où on le
+cherche.**
+
+> **Correction.** La première version de ce document affirmait qu'« on ne voit le
+> Mdall qu'au moment de signer ». C'est faux, et il faut le dire plutôt que de
+> construire dessus : `la-synthese.js` le montre déjà au moment de l'analyse,
+> pour un **compte rendu** et pour un **fil de mails**, sous l'onglet *Synthèse*
+> de leur détail. Ce que j'avais pris pour un trou était un écran que je n'avais
+> pas lu.
+
+Ce qui manque vraiment est plus précis, et plus facile à réparer :
+
+- il est **l'item 3 de 4** d'une section nommée *Synthèse* — un mot qui ne dit
+  pas « voici le code qui sera versé » ;
+- un **rapport de bureau de contrôle n'a pas de Synthèse du tout.** Son détail a
+  deux onglets, et le commentaire du code dit pourquoi : « un rapport de contrôle
+  ne relève pas d'idées : son analyse gelée n'en porte pas ». C'est vrai de ses
+  idées, et ce n'est pas vrai de ses avis — un avis est un constat, et un constat
+  s'écrit en Mdall.
+
+Et la demande explicite reste entière : *« avant d'envisager une proposition, on
+a envie de voir aussi les vérifications, et le code qui sera versé si jamais on
+décide d'en faire une proposition. »* Les vérifications, elles, ne sont nulle
+part — c'est D4.
 
 **D4 — « Vérifications » ne vérifie pas le code.** L'onglet dit ce que l'analyse
 a lu, ce qu'elle en tire et ce qu'elle n'a pas pu lire. C'est de la
@@ -164,11 +181,10 @@ range chaque bloc Mdall sous son cran.
 Pourquoi en premier : c'est le vocabulaire que les cinq tours suivants emploient.
 Écrit après, il aurait été écrit cinq fois.
 
-> **Ce qui est à décider :** le cran 4 (les chemins entre fonctions) est le seul
-> qui ne se lise pas dans un bloc isolé — il faut deux blocs pour le voir. Le
-> montrer demande un petit graphe, ou une liste « cette règle emploie la valeur
-> que cette autre a conclue ». Je propose la liste d'abord : elle se lit sans
-> apprendre à lire un graphe, et elle ne coûte rien.
+> **Tranché : le cran 4 se montre en liste.** « On verra si nécessaire pour un
+> graphe après. » Une liste se lit sans avoir appris à lire un graphe, et c'est
+> le lecteur qu'on vise. Le graphe reste possible : la liste et lui se
+> calculeraient depuis les mêmes paires.
 
 ### Tour 2 — Le Mdall passe devant, dans *Changements*
 
@@ -233,8 +249,8 @@ Et quand ça ne va pas, ça se dit en premier :
       hauteur = 26 m, logements = 42  →  "3e famille A"   ✗ le document dit « 3e famille B »
 ```
 
-> **Ce qui est à décider :** d'où viennent les cas. Trois sources possibles, et
-> je propose les deux premières ensemble :
+> **Tranché : les deux premières sources, ensemble.** Les cas viennent du
+> document *et* des bornes de la règle :
 > 1. **du document lui-même** — chaque valeur relevée est un cas, et la règle
 >    doit retrouver ce que le document conclut. Gratuit, honnête, et c'est le
 >    cas le plus parlant pour l'utilisateur ;
@@ -244,25 +260,16 @@ Et quand ça ne va pas, ça se dit en premier :
 > 3. de cas écrits à la main — à ne pas faire : c'est demander à un architecte
 >    d'écrire des tests.
 
-### Tour 5 — Les mots de l'écran
+### ~~Tour 5 — Les mots de l'écran~~ — retiré
 
-Les onglets d'une proposition cessent d'être ceux de GitHub, et deviennent la
-chaîne :
+Il proposait de renommer *Changements* en « La traduction » et *Vérifications*
+en « Les preuves ».
 
-| aujourd'hui | demain | la question posée |
-| --- | --- | --- |
-| Conversation | Conversation | pourquoi, par qui, et que décide-t-on ? |
-| Dépôts | Les documents | qu'est-ce qui est entré, et quand ? |
-| Changements | **La traduction** | qu'avons-nous compris, et dans quelle langue ? |
-| Vérifications | **Les preuves** | comment savons-nous que c'est juste ? |
-
-Et l'ordre change : *La traduction* avant *Les preuves*, parce qu'on ne prouve
-pas ce qu'on n'a pas encore lu.
-
-> C'est un renommage, donc c'est réversible et ça ne coûte presque rien. Mais
-> c'est aussi le tour le plus discutable du plan : *Changements* et
-> *Vérifications* ont l'avantage d'être les mots de tout le monde. **À trancher
-> ensemble avant de le faire.**
+> **Tranché : on ne renomme pas.** « Les mots actuels sont suffisamment justes et
+> corrects. » Et c'était le tour le plus discutable du plan : *Changements* et
+> *Vérifications* ont l'avantage d'être les mots de tout le monde. Ce que le
+> renommage cherchait à obtenir — qu'on sache ce qu'on regarde — s'obtient par
+> ce que les onglets **contiennent**, c'est-à-dire par les tours 2 et 4.
 
 ### Tour 6 — Le parcours de démonstration
 
@@ -325,24 +332,38 @@ Nommé, parce qu'un plan dont on ignore les trous se présente comme complet.
 ## 8. L'ordre recommandé, et pourquoi
 
 ```
-Tour 1  les crans nommés            ← le vocabulaire des cinq suivants
-Tour 3  le Mdall à l'analyse        ← le plus grand effet, et il ne coûte aucun appel
-Tour 2  le Mdall devant le diff     ← court, une fois les crans posés
-Tour 4  les preuves du code         ← le plus de travail, et il a besoin des crans
-Tour 5  les mots de l'écran         ← à trancher ensemble d'abord
-Tour 6  le parcours                 ← en dernier : il raconte ce qui existe
+Tour 1  les crans nommés            ✔ livré  ← le vocabulaire de tous les autres
+Tour 2  le Mdall devant le diff     ✔ livré  ← et groupé par cran partout d'un coup
+Tour 3  le Mdall à l'analyse                 ← le rapport BC, et le cadrage
+Tour 4  les preuves du code                  ← le plus de travail, il a besoin des crans
+Tour 6  le parcours                          ← en dernier : il raconte ce qui existe
 ```
 
-Le tour 3 passe devant le tour 2 : montrer le Mdall là où il n'y en a pas du
-tout vaut mieux que de réordonner là où il y en a déjà. Et c'est celui qui
-répond le plus directement à la demande — *voir le code avant même d'envisager
-une proposition*.
+**Les tours 1 et 2 sont allés ensemble, et le 2 est passé devant le 3.** Deux
+raisons, découvertes en les écrivant :
+
+1. Le tour 1 seul aurait livré un module que rien n'appelle. Le tour 2 est son
+   premier emploi, et le plus court.
+2. Le groupement par cran a été posé dans **le panneau partagé**
+   (`views/ui/mdall-a-proposer.js`), qui est le seul : l'onglet Changements, le
+   Copilote, la lecture des comptes rendus et celle des fils de mails
+   l'emploient tous les quatre. Les quatre ont donc gagné les crans **par ce
+   seul changement**, sans qu'aucun soit retouché (règle 4) — et le tour 3 s'est
+   trouvé à moitié fait avant d'être commencé.
+
+Ce qui reste du tour 3 est donc plus étroit qu'annoncé : le **rapport de bureau
+de contrôle**, qui n'a pas de Synthèse, et le **cadrage** — une phrase qui dit
+« rien n'est encore écrit, voici ce qui serait versé » là où le mot *Synthèse*
+ne le dit pas.
 
 ---
 
-## 9. Trois choses à trancher avant de commencer
+## 9. Les trois décisions, et ce qu'elles ferment
 
-1. **Le cran 4** se montre-t-il en liste ou en graphe ? (je propose la liste)
-2. **Les cas de test** viennent-ils du document, des bornes de la règle, ou des
-   deux ? (je propose les deux)
-3. **Les onglets** se renomment-ils ? (je propose d'en parler avant de le faire)
+| | la question | tranché |
+| --- | --- | --- |
+| 1 | le cran 4 en liste ou en graphe ? | **en liste** d'abord ; le graphe si la liste ne suffit pas |
+| 2 | d'où viennent les cas de test ? | **du document et des bornes de la règle**, les deux |
+| 3 | les onglets se renomment-ils ? | **non** — les mots actuels sont justes |
+
+Plus rien n'est en attente d'une décision pour avancer.
