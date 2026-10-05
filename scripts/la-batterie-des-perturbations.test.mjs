@@ -35,13 +35,14 @@ import {
 } from "./la-batterie-des-perturbations/les-perturbations.js";
 import {
   LES_FAMILLES_PROJETEES, combienDeReleves, laCleDunReleve, lempreinteDuneLecture
-} from "./la-batterie-des-perturbations/lempreinte-dune-lecture.js";
+} from "./la-mesure-des-analyses/lempreinte-dune-lecture.js";
 import {
-  VERDICT, ceQuiSepare, laRelationTient
+  VERDICT, laRelationTient
 } from "./la-batterie-des-perturbations/la-relation.js";
+import { ceQuiSepare } from "./la-mesure-des-analyses/ce-qui-separe.js";
 import {
   lesCitationsSeRetrouvent, lesMarquesSontDeclarees, pourChercherUneCitation
-} from "./la-batterie-des-perturbations/les-invariants.js";
+} from "./la-mesure-des-analyses/les-invariants.js";
 import {
   POURQUOI_PAS, leBilan, passerLaBatterie, passerUneEpreuve
 } from "./la-batterie-des-perturbations/passer-la-batterie.js";
@@ -51,7 +52,7 @@ import {
 } from "./la-batterie-des-perturbations/un-lecteur-de-carton.js";
 import {
   lesPagesDuDocument, unLecteurDuServeur
-} from "./la-batterie-des-perturbations/un-lecteur-du-serveur.js";
+} from "./la-mesure-des-analyses/un-lecteur-du-serveur.js";
 import { FAMILLE } from "../apps/web/js/services/les-familles-de-document.js";
 
 const LE_RICT = leCorpus().find((un) => un.famille === FAMILLE.CONTROLE);
@@ -917,7 +918,7 @@ test("les pages d'un document se séparent sur la coupure déclarée", () => {
  */
 test("le câblage de la batterie nomme les mêmes fonctions et les mêmes champs que le serveur", () => {
   const ici = readFileSync(
-    new URL("./la-batterie-des-perturbations/un-lecteur-du-serveur.js", import.meta.url), "utf8");
+    new URL("./la-mesure-des-analyses/un-lecteur-du-serveur.js", import.meta.url), "utf8");
   const laBas = readFileSync(
     new URL("../supabase/functions/lire-les-rapports/index.ts", import.meta.url), "utf8");
 

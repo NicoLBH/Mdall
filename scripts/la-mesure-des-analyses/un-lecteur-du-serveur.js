@@ -29,7 +29,7 @@
 
 import { lireUnRapport } from "../../apps/web/js/services/lire-un-rapport.js";
 import { FAMILLE } from "../../apps/web/js/services/les-familles-de-document.js";
-import { LA_COUPURE } from "./les-perturbations.js";
+import { LA_COUPURE } from "../la-batterie-des-perturbations/les-perturbations.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 

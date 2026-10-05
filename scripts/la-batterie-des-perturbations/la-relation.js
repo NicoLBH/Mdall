@@ -22,7 +22,8 @@
 const texte = (valeur) => String(valeur ?? "").trim();
 
 import { RELATION } from "./les-perturbations.js";
-import { combienDeReleves, laCleDunReleve } from "./lempreinte-dune-lecture.js";
+import { combienDeReleves } from "../la-mesure-des-analyses/lempreinte-dune-lecture.js";
+import { ceQuiSepare } from "../la-mesure-des-analyses/ce-qui-separe.js";
 
 /** Ce qu'une épreuve rend. */
 export const VERDICT = {
@@ -41,45 +42,6 @@ export const VERDICT = {
 const sansObjet = (dit) => ({ verdict: VERDICT.SANS_OBJET, dit });
 const tient = (dit) => ({ verdict: VERDICT.TIENT, dit });
 const tombe = (dit) => ({ verdict: VERDICT.TOMBE, dit });
-
-/**
- * Ce qui sépare deux empreintes, clé par clé.
- *
- * Rendu en mots, et non en booléen : « A-23 a disparu » se lit, « false » se
- * cherche. Un écart qu'on ne sait pas nommer ne se corrige pas.
- */
-export function ceQuiSepare(avant = null, apres = null, { substitution = null } = {}) {
-  /**
-   * **La substitution se normalise comme les clés.**
-   *
-   * Elle vient de la perturbation, qui parle la langue du document — « A-23 ».
-   * Les clés de l'empreinte, elles, sont normalisées — « a 23 ». Comparer les
-   * deux formes ne rapprochait jamais rien : la référence d'origine « avait
-   * disparu » et la nouvelle « était apparue », sur une lecture parfaitement
-   * juste. La batterie accusait la lecture de son propre défaut, ce qui est le
-   * pire résultat qu'un instrument de mesure puisse rendre.
-   */
-  const ancienne = substitution ? laCleDunReleve({ reference: substitution.de }) : "";
-  const nouvelle = substitution ? laCleDunReleve({ reference: substitution.vers }) : "";
-  const clefDe = (cle) => (ancienne && cle === ancienne ? nouvelle : cle);
-  const ecarts = [];
-
-  for (const [cle, un] of (avant?.parCle ?? new Map())) {
-    const attendue = clefDe(cle);
-    const autre = apres?.parCle?.get(attendue);
-    if (!autre) { ecarts.push(`« ${cle} » a disparu`); continue; }
-    if (texte(un.marque) !== texte(autre.marque)) {
-      ecarts.push(`« ${cle} » : marque ${texte(un.marque) || "(vide)"} → ${texte(autre.marque) || "(vide)"}`);
-    }
-  }
-
-  const connues = new Set([...(avant?.parCle ?? new Map()).keys()].map(clefDe));
-  for (const cle of (apres?.parCle ?? new Map()).keys()) {
-    if (!connues.has(cle)) ecarts.push(`« ${cle} » est apparu`);
-  }
-
-  return ecarts;
-}
 
 /**
  * La relation tient-elle ?

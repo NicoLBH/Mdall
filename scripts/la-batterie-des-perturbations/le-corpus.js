@@ -32,7 +32,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LES_FAMILLES_PROJETEES } from "./lempreinte-dune-lecture.js";
+import { LES_FAMILLES_PROJETEES } from "../la-mesure-des-analyses/lempreinte-dune-lecture.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 export const OU_EST_LE_CORPUS = join(ICI, "le-corpus");
